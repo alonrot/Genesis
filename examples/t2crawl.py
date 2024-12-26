@@ -34,14 +34,10 @@ def main():
         ),
     )
 
-    # mjcf = "/Users/alonrot/work_figure_ai/genesis/Genesis/b_sample.xml"
     mjcf = "/Users/alonrot/work_figure_ai/ws/project-x/robot_config/sim/b_sample/b_sample.xml"
 
     ########################## entities ##########################
     plane = scene.add_entity(gs.morphs.Plane())
-    # r0 = scene.add_entity(
-    #     gs.morphs.MJCF(file="xml/franka_emika_panda/panda.xml"),
-    # )
     robot = scene.add_entity(
         gs.morphs.MJCF(file=mjcf,
         pos   = (0, 0, 0.3),
@@ -81,8 +77,6 @@ def main():
     if args.vis:
         scene.viewer.start()
 
-
-
 def simple_ramp_from_current_to_desired_pose(current_pose, desired_pose, alpha):
     return (1 - alpha) * current_pose + alpha * desired_pose
 
@@ -106,21 +100,15 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
     t_start = time()
     t_elapsed = 0.0
     t_loop_start = 0.0
-
-    # joint_positions_desired = np.array([t_pose_ground[joint_name] for joint_name in joint_names])
-
     t_increment = 3.0
-
     t_hold_start = 10.0
     
+    # Set desired to measured
     joint_positions_desired = robot.get_dofs_position(dofs_idx).clone().detach().numpy()
 
+    alpha = 0.01
+
     while t_elapsed < t_total:
-
-        joint_positions_measured = robot.get_dofs_position(dofs_idx).clone().detach().numpy()
-        # print("joint_positions_measured: ", joint_positions_measured)
-
-        # joint_positions_desired = joint_positions_measured.clone().detach().numpy()
 
         joint_positions_target = np.array([t_pose_arms_up[joint_name] for joint_name in joint_names])
 
@@ -140,8 +128,7 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
         else:
             joint_positions_target = np.array([crawl_pose_elbows_semi_flexed[joint_name] for joint_name in joint_names])
 
-        # if t_elapsed > 10.0:
-        joint_positions_desired = simple_ramp_from_current_to_desired_pose(joint_positions_desired, joint_positions_target, 0.05)
+        joint_positions_desired = simple_ramp_from_current_to_desired_pose(joint_positions_desired, joint_positions_target, alpha)
 
         robot.control_dofs_position(joint_positions_desired, dofs_idx)
 
@@ -163,3 +150,7 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
 
 if __name__ == "__main__":
     main()
+
+    """
+    run as python examples/t2crawl.py --vis
+    """

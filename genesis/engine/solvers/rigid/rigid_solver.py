@@ -2908,8 +2908,11 @@ class RigidSolver(Solver):
                     self.qpos[q_start + i + 3, envs_idx[i_b_]] = quat[i_b_, i_l_, i]
 
     def set_qpos(self, qpos, qs_idx, envs_idx=None):
+
+        import pdb;pdb.set_trace()
         qpos, qs_idx, envs_idx = self._validate_1D_io_variables(qpos, qs_idx, envs_idx, idx_name="qs_idx")
 
+        import pdb;pdb.set_trace()
         self._kernel_set_qpos(
             qpos,
             qs_idx,
@@ -2926,6 +2929,7 @@ class RigidSolver(Solver):
     ):
         ti.loop_config(serialize=self._para_level < gs.PARA_LEVEL.PARTIAL)
         for i_q_, i_b_ in ti.ndrange(qs_idx.shape[0], envs_idx.shape[0]):
+            import pdb;pdb.set_trace()
             self.qpos[qs_idx[i_q_], envs_idx[i_b_]] = qpos[i_b_, i_q_]
 
     def set_dofs_kp(self, kp, dofs_idx):

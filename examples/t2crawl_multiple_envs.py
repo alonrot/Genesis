@@ -34,14 +34,10 @@ def main():
         ),
     )
 
-    # mjcf = "/Users/alonrot/work_figure_ai/genesis/Genesis/b_sample.xml"
     mjcf = "/Users/alonrot/work_figure_ai/ws/project-x/robot_config/sim/b_sample/b_sample.xml"
 
     ########################## entities ##########################
     plane = scene.add_entity(gs.morphs.Plane())
-    # r0 = scene.add_entity(
-    #     gs.morphs.MJCF(file="xml/franka_emika_panda/panda.xml"),
-    # )
     robot = scene.add_entity(
         gs.morphs.MJCF(file=mjcf,
         pos   = (0, 0, 0.3),
@@ -57,7 +53,11 @@ def main():
     dofs_idx = [robot.get_joint(name).dof_idx_local for name in joint_names]
 
     ########################## build ##########################
-    scene.build()
+
+
+    # create 4 parallel environments
+    B = 4
+    scene.build(n_envs=B, env_spacing=(2.0, 2.0))
 
     ############ Optional: set control gains ############
     # set positional gains
@@ -77,50 +77,34 @@ def main():
         dofs_idx_local = dofs_idx,
     )
 
-    gs.tools.run_in_another_thread(fn=run_sim, args=(scene, robot, dofs_idx, joint_names, args.vis))
+    gs.tools.run_in_another_thread(fn=run_sim, args=(scene, robot, dofs_idx, joint_names, B, args.vis))
     if args.vis:
         scene.viewer.start()
-
-
 
 def simple_ramp_from_current_to_desired_pose(current_pose, desired_pose, alpha):
     return (1 - alpha) * current_pose + alpha * desired_pose
 
-def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
-
-    # # From go2_env.py
-    # self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in self.env_cfg["dof_names"]]
-    # self.base_pos[:] = self.robot.get_pos()
-    # self.base_quat[:] = self.robot.get_quat()
-    # self.base_euler = quat_to_xyz(
-    #     transform_quat_by_quat(torch.ones_like(self.base_quat) * self.inv_base_init_quat, self.base_quat)
-    # )
-    # inv_base_quat = inv_quat(self.base_quat)
-    # self.base_lin_vel[:] = transform_by_quat(self.robot.get_vel(), inv_base_quat)
-    # self.base_ang_vel[:] = transform_by_quat(self.robot.get_ang(), inv_base_quat)
-    # self.projected_gravity = transform_by_quat(self.global_gravity, inv_base_quat)
-    # self.dof_pos[:] = self.robot.get_dofs_position(self.motor_dofs)
-    # self.dof_vel[:] = self.robot.get_dofs_velocity(self.motor_dofs)
+def run_sim(scene, robot, dofs_idx, joint_names, B, enable_vis):
 
     t_total = 60.0
     t_start = time()
     t_elapsed = 0.0
     t_loop_start = 0.0
-
-    # joint_positions_desired = np.array([t_pose_ground[joint_name] for joint_name in joint_names])
-
     t_increment = 3.0
-
     t_hold_start = 10.0
     
-    joint_positions_desired = robot.get_dofs_position(dofs_idx).clone().detach().numpy()
+    # Set desired to measured
+    joint_positions_measured = robot.get_dofs_position(dofs_idx)
+    joint_positions_desired = joint_positions_measured.clone().detach().numpy()
+    # NOTE: Because we've set B = 4 at scene build, the measured is not a 1-D vector, but a [4 x nDofs] matrix
+    # In this example, we set the desired to be equal to one of the measured to simplify the ramp() and other
+    # computations below. Doing this properly involves exiding the functions below to handle bacthes of desired
+    # poses.
+    joint_positions_desired = joint_positions_desired[0]
+
+    alpha = 0.01
 
     while t_elapsed < t_total:
-
-        joint_positions_measured = robot.get_dofs_position(dofs_idx).clone().detach().numpy()
-        # print("joint_positions_measured: ", joint_positions_measured)
-
-        # joint_positions_desired = joint_positions_measured.clone().detach().numpy()
 
         joint_positions_target = np.array([t_pose_arms_up[joint_name] for joint_name in joint_names])
 
@@ -140,10 +124,13 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
         else:
             joint_positions_target = np.array([crawl_pose_elbows_semi_flexed[joint_name] for joint_name in joint_names])
 
-        # if t_elapsed > 10.0:
-        joint_positions_desired = simple_ramp_from_current_to_desired_pose(joint_positions_desired, joint_positions_target, 0.05)
+        joint_positions_desired = simple_ramp_from_current_to_desired_pose(joint_positions_desired, joint_positions_target, alpha)
 
-        robot.control_dofs_position(joint_positions_desired, dofs_idx)
+        joint_positions_desired_batched = torch.tile(
+            torch.tensor(joint_positions_desired, device=gs.device), (B, 1)
+        )
+
+        robot.control_dofs_position(joint_positions_desired_batched, dofs_idx_local=dofs_idx)
 
         scene.step()
 
@@ -163,3 +150,7 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
 
 if __name__ == "__main__":
     main()
+
+    """
+    python examples/t2crawl_multiple_envs.py --vis
+    """
