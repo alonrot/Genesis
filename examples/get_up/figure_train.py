@@ -3,7 +3,7 @@ import os
 import pickle
 import shutil
 
-from go2_env import Go2Env
+from figure_env import FigureEnv
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
@@ -151,7 +151,7 @@ def main():
         shutil.rmtree(log_dir)
     os.makedirs(log_dir, exist_ok=True)
 
-    env = Go2Env(
+    env = FigureEnv(
         num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device="cpu"
     )
 

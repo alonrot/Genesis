@@ -4,7 +4,11 @@ import numpy as np
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
 
-from skeleton_properties import KP, KD, torque_lb, torque_ub
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# export PYTHONPATH="/Users/alonrot/work_figure_ai/genesis/Genesis"
+from examples.skeleton_properties import KP, KD, torque_lb, torque_ub
 
 from pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
 
