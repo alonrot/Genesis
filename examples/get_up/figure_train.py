@@ -152,7 +152,7 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
 
     env = FigureEnv(
-        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device="cpu"
+        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device="cuda:0"
     )
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
