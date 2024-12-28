@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import shutil
+from datetime import datetime
 
 from figure_env import FigureEnv, get_cfgs
 from rsl_rl.runners import OnPolicyRunner
@@ -30,7 +31,8 @@ def main():
         num_envs=args.n_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device=device, show_viewer=True,
     )
 
-    log_dir = f"logs/{args.exp_name}"
+    # Create log_dir name using time of day as YYYYMMDD_HHmmSS
+    log_dir = f"logs/{args.exp_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}/"
     writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
     gs.tools.run_in_another_thread(fn=run_sim_random_actions, args=(env, writer))

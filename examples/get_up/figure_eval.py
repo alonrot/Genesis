@@ -5,6 +5,7 @@ import shutil
 
 from figure_env import FigureEnv
 from rsl_rl.runners import OnPolicyRunner
+from datetime import datetime
 
 import genesis as gs
 
@@ -25,7 +26,7 @@ def main():
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
     gs.init(logging_level="info", backend=backend)
 
-    log_dir = f"logs/{args.exp_name}"
+    log_dir = f"logs/{args.exp_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}/"
     env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(open(f"logs/{args.exp_name}/cfgs.pkl", "rb"))
     reward_cfg["reward_scales"] = {}
 

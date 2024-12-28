@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import shutil
+from datetime import datetime
 
 from figure_env import FigureEnv, get_train_cfg, get_cfgs
 from rsl_rl.runners import OnPolicyRunner
@@ -16,13 +17,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--exp_name", type=str, default="getup")
     parser.add_argument("-B", "--num_envs", type=int, default=4096)
-    parser.add_argument("--max_iterations", type=int, default=100)
+    parser.add_argument("--max_iterations", type=int, default=500)
     args = parser.parse_args()
 
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
     gs.init(logging_level="info", backend=backend)
 
-    log_dir = f"logs/{args.exp_name}"
+    log_dir = f"logs/{args.exp_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}/"
     env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()
     train_cfg = get_train_cfg(args.exp_name, args.max_iterations)
 
