@@ -3,6 +3,13 @@ import math
 import numpy as np
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
+
+import os
+if 'figva' in os.uname()[1]:
+    MJCF_PATH = "/shared/home/alonrot/project-x/robot_config/sim/b_sample/b_sample.xml"
+else:
+    MJCF_PATH = "/Users/alonrot/work_figure_ai/ws/project-x/robot_config/sim/b_sample/b_sample.xml"
+
 # from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
 
 # from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
@@ -256,7 +263,7 @@ class FigureEnv:
             show_viewer=show_viewer,
         )
 
-        mjcf = "/Users/alonrot/work_figure_ai/ws/project-x/robot_config/sim/b_sample/b_sample.xml"
+
 
         # add plain
         self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
@@ -266,7 +273,7 @@ class FigureEnv:
         self.base_init_quat = torch.tensor(self.env_cfg["base_init_quat"], device=self.device)
         self.inv_base_init_quat = inv_quat(self.base_init_quat)
         self.robot = self.scene.add_entity(
-            gs.morphs.MJCF(file=mjcf,
+            gs.morphs.MJCF(file=MJCF_PATH,
             pos   = (0, 0, 0.3),
             euler = (0, 90, 0), # we follow scipy's extrinsic x-y-z rotation convention, in degrees,
             # quat  = (1.0, 0.0, 0.0, 0.0), # we use w-x-y-z convention for quaternions,
