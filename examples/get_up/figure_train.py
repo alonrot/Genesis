@@ -136,12 +136,12 @@ def get_cfgs():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="go2-walking")
-    parser.add_argument("-B", "--num_envs", type=int, default=4096)
+    parser.add_argument("-e", "--exp_name", type=str, default="getup")
+    parser.add_argument("-B", "--num_envs", type=int, default=2)
     parser.add_argument("--max_iterations", type=int, default=100)
     args = parser.parse_args()
 
-    gs.init(logging_level="warning")
+    gs.init(logging_level="info")
 
     log_dir = f"logs/{args.exp_name}"
     env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()
