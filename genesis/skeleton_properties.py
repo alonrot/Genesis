@@ -64,6 +64,8 @@ KP = {
     "neck_yes": 35
 }
 
+joint_names = [joint_name for joint_name in KP.keys()]
+
 
 KD = {
     "left.hip_z": 15,

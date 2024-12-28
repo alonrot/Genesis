@@ -81,6 +81,8 @@ KP = {
     "neck_yes": 35
 }
 
+joint_names = [joint_name for joint_name in KP.keys()]
+
 
 KD = {
     "left.hip_z": 15,
@@ -216,6 +218,45 @@ downward_facing_dog = {
   "neck_yes": 0.000681877,
 }
 
+crawl_pose_elbows_semi_flexed = {
+    # Left side
+    "left.hip_z": -0.15,
+    "left.hip_x": 0.4,
+    "left.hip_y": -2.0,
+    "left.knee": 2.356,
+    "left.ankle_y": -1.053,
+    "left.ankle_x": -0.2,
+    "left.shoulder_j1": -1.63,
+    "left.shoulder_j2": -0.12,
+    "left.upper_arm_twist": -0.185,
+    "left.elbow": -1.1,
+    "left.wrist_roll": 0.0,
+    "left.wrist_pitch": 0.0,
+    "left.wrist_yaw": -0.5,
+
+    # Right side
+    "right.hip_z": 0.15,
+    "right.hip_x": -0.4,
+    "right.hip_y": -2.0,
+    "right.knee": 2.356,
+    "right.ankle_y": -1.053,
+    "right.ankle_x": 0.2,
+    "right.shoulder_j1": 1.63,
+    "right.shoulder_j2": 0.12,
+    "right.upper_arm_twist": -0.185,
+    "right.elbow": 1.1,
+    "right.wrist_roll": 0.0,
+    "right.wrist_pitch": 0.0,
+    "right.wrist_yaw": 0.5,
+
+    # Spine and neck
+    "spine_z": 0.0,
+    "spine_x": 0.0,
+    "neck_no": 0.0,
+    "neck_yes": 0.0,
+}
+
+
 
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
@@ -229,6 +270,7 @@ class FigureEnv:
         self.num_obs = obs_cfg["num_obs"]
         self.num_privileged_obs = None
         self.num_actions = env_cfg["num_actions"]
+        assert self.num_actions == len(KP) == len(KD), "Number of actions must match number of joints (for now)"
         self.num_commands = command_cfg["num_commands"]
 
         self.simulate_action_latency = True  # there is a 1 step latency on real robot
@@ -290,7 +332,7 @@ class FigureEnv:
         self.scene.build(n_envs=self.num_envs)
 
         # names to indices
-        self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in self.env_cfg["dof_names"]]
+        self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in joint_names]
 
         # PD control parameters
         # self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
@@ -346,7 +388,7 @@ class FigureEnv:
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
         self.base_quat = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
         self.default_dof_pos = torch.tensor(
-            [self.env_cfg["default_joint_angles"][name] for name in self.env_cfg["dof_names"]],
+            [crawl_pose_elbows_semi_flexed[name] for name in joint_names],
             device=self.device,
             dtype=gs.tc_float,
         )
@@ -494,15 +536,15 @@ class FigureEnv:
 
     def _reward_com_position_rt_base(self):
         # Penalize COM position such that it gets closer and closer to be between the feet
-        pass
+        return 0.0
 
     def _reward_com_position_rt_base_terminal(self):
         # Terminal cost
-        pass
+        return 0.0
 
     def _reward_final_body_pose_terminal(self):
         # Terminal body pose
-        assert False, "Untested"
+        # assert False, "Untested"
         return torch.sum(torch.square(self.dof_pos - downward_facing_dog[self.dofs_idx]), dim=1)
 
 

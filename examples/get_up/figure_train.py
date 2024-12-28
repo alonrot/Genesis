@@ -8,6 +8,9 @@ from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
 
+import torch
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+print("Using device:", device)
 
 def get_train_cfg(exp_name, max_iterations):
 
@@ -58,45 +61,13 @@ def get_train_cfg(exp_name, max_iterations):
 
 def get_cfgs():
     env_cfg = {
-        "num_actions": 12,
-        # joint/link names
-        "default_joint_angles": {  # [rad]
-            "FL_hip_joint": 0.0,
-            "FR_hip_joint": 0.0,
-            "RL_hip_joint": 0.0,
-            "RR_hip_joint": 0.0,
-            "FL_thigh_joint": 0.8,
-            "FR_thigh_joint": 0.8,
-            "RL_thigh_joint": 1.0,
-            "RR_thigh_joint": 1.0,
-            "FL_calf_joint": -1.5,
-            "FR_calf_joint": -1.5,
-            "RL_calf_joint": -1.5,
-            "RR_calf_joint": -1.5,
-        },
-        "dof_names": [
-            "FR_hip_joint",
-            "FR_thigh_joint",
-            "FR_calf_joint",
-            "FL_hip_joint",
-            "FL_thigh_joint",
-            "FL_calf_joint",
-            "RR_hip_joint",
-            "RR_thigh_joint",
-            "RR_calf_joint",
-            "RL_hip_joint",
-            "RL_thigh_joint",
-            "RL_calf_joint",
-        ],
-        # PD
-        "kp": 20.0,
-        "kd": 0.5,
+        "num_actions": 30, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
         "termination_if_roll_greater_than": 10,  # degree
         "termination_if_pitch_greater_than": 10,
         # base pose
-        "base_init_pos": [0.0, 0.0, 0.42],
-        "base_init_quat": [1.0, 0.0, 0.0, 0.0],
+        "base_init_pos": [0.0, 0.0, 0.3],
+        "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
         "resampling_time_s": 4.0,
         "action_scale": 0.25,
@@ -121,6 +92,9 @@ def get_cfgs():
             "zero_base_yaw_twist": 0.2,
             "action_rate": -0.005,
             "base_pitch_yaw_tilt": 1.0,
+            "com_position_rt_base": 1.0,
+            "com_position_rt_base_terminal": 1.0,
+            "final_body_pose_terminal": 1.0,
             # "similar_to_default": -0.1,
         },
     }
@@ -152,10 +126,10 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
 
     env = FigureEnv(
-        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device="cuda:0"
+        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device=device
     )
 
-    runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
+    runner = OnPolicyRunner(env, train_cfg, log_dir, device=device)
 
     pickle.dump(
         [env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg],
