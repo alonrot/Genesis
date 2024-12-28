@@ -19,7 +19,7 @@ class Visualizer(RBC):
         self._scene = scene
 
         # Rasterizer context is shared by viewer and rasterizer.
-        if not show_viewer and gs.platform not in ["Linux", "macOS"]:
+        if not show_viewer: # and gs.platform not in ["Linux", "macOS"]:
             gs.logger.warning(f"Headless rendering not yet supported on {gs.platform}.")
             self._context = None
         else:

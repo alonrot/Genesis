@@ -10,13 +10,8 @@ try:
     from genesis.ext.pyrender.jit_render import JITRenderer
 except Exception as e:
     print(f"[Error]: {e}\n")
-    USE_RENDER = False
-else:
-    USE_RENDER = True
 from genesis.utils.misc import tensor_to_array
 from genesis.ext import trimesh
-
-USE_RENDER = False
 
 class RasterizerContext:
     def __init__(self, options):
@@ -70,10 +65,9 @@ class RasterizerContext:
             self.n_rendered_envs = self.sim._B
 
         # pyrender scene
-        if USE_RENDER:
-            self._scene = pyrender.Scene(ambient_light=self.ambient_light, bg_color=self.background_color)
+        self._scene = pyrender.Scene(ambient_light=self.ambient_light, bg_color=self.background_color)
 
-            self.jit = JITRenderer(self._scene, [], [])
+        self.jit = JITRenderer(self._scene, [], [])
 
         # nodes
         self.world_frame_node = None
