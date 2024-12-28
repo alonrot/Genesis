@@ -110,7 +110,7 @@ def get_cfgs():
 
 def main():
 
-    gs.init(logging_level="info")
+    gs.init(logging_level="info", backend=gs.constants.backend.cpu)
 
     env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()
 
@@ -124,7 +124,7 @@ def main():
     print("obs", obs.shape)
     print("rew", rew.shape)
     print("reset", reset.shape)
-    print("extras", extras.shape)
+    print("extras", extras)
 
 
 if __name__ == "__main__":

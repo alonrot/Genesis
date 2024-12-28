@@ -372,6 +372,7 @@ class FigureEnv:
         )
         self.obs_buf = torch.zeros((self.num_envs, self.num_obs), device=self.device, dtype=gs.tc_float)
         self.rew_buf = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
+        self.rew_buf_terminal = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
         self.reset_buf = torch.ones((self.num_envs,), device=self.device, dtype=gs.tc_int)
         self.episode_length_buf = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_int)
         self.commands = torch.zeros((self.num_envs, self.num_commands), device=self.device, dtype=gs.tc_float)
@@ -389,6 +390,11 @@ class FigureEnv:
         self.base_quat = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
         self.default_dof_pos = torch.tensor(
             [crawl_pose_elbows_semi_flexed[name] for name in joint_names],
+            device=self.device,
+            dtype=gs.tc_float,
+        )
+        self.terminal_dof_pos = torch.tensor(
+            [downward_facing_dog[name] for name in joint_names],
             device=self.device,
             dtype=gs.tc_float,
         )
@@ -519,41 +525,38 @@ class FigureEnv:
         # Penalize lateral base velocity
         # import pdb; pdb.set_trace()
         # lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, 1]), dim=1)
-        lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, 1]), dim=0)
+        lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, 1:2]), dim=1)
         return torch.exp(-lin_vel_error / self.reward_cfg["tracking_sigma"])
 
     def _reward_zero_base_yaw_twist(self):
         # Penalize yaw twist component
         # import pdb; pdb.set_trace()
-        ang_vel_error = torch.sum(self.base_ang_vel[:, 2]**2)
+        ang_vel_error = torch.sum(torch.square(self.base_ang_vel[:, 2:3]), dim=1)
         return torch.exp(-ang_vel_error / self.reward_cfg["tracking_sigma"])
 
     def _reward_action_rate(self):
         # Penalize changes in actions
         # import pdb; pdb.set_trace()
-        # return torch.sum(torch.square(self.last_actions - self.actions), dim=1)
-        return torch.sum(torch.square(self.last_actions - self.actions), dim=0)
+        return torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
     def _reward_base_pitch_yaw_tilt(self):
         # Penalize base tilting: Assuming that the torso will be mostly rotated,
         # we penalize pitch and yaw tilting in Base frame coordinates.
-        import pdb; pdb.set_trace()
         return torch.sum(torch.square(self.projected_gravity[:,1::]), dim=1)
 
     def _reward_com_position_rt_base(self):
         # Penalize COM position such that it gets closer and closer to be between the feet
-        return 0.0
+        return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
     def _reward_com_position_rt_base_terminal(self):
         # Terminal cost
-        return 0.0
+        return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
     def _reward_final_body_pose_terminal(self):
-        # Terminal body pose
-        # assert False, "Untested"
-        import pdb; pdb.set_trace()
-        return torch.sum(torch.square(self.dof_pos - downward_facing_dog[self.dofs_idx]), dim=1)
-
+        self.rew_buf_terminal[:] = 0.0
+        self.rew_buf_terminal[self.reset_buf] = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
+        #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
+        return self.rew_buf_terminal
 
     # def _reward_similar_to_default(self):
     #     # Penalize joint poses far away from default pose
