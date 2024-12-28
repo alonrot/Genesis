@@ -75,7 +75,7 @@ def get_cfgs():
         "clip_actions": 100.0,
     }
     obs_cfg = {
-        "num_obs": 45,
+        "num_obs": 99,
         "obs_scales": {
             "lin_vel": 2.0,
             "ang_vel": 0.25,
