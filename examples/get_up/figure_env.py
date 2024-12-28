@@ -517,16 +517,19 @@ class FigureEnv:
     # ------------ reward functions----------------
     def _reward_zero_lateral_base_vel(self):
         # Penalize lateral base velocity
+        import pdb; pdb.set_trace()
         lin_vel_error = torch.sum(torch.square(self.base_lin_vel[:, 1]), dim=1)
         return torch.exp(-lin_vel_error / self.reward_cfg["tracking_sigma"])
 
     def _reward_zero_base_yaw_twist(self):
         # Penalize yaw twist component
+        import pdb; pdb.set_trace()
         ang_vel_error = torch.sum(self.base_ang_vel[:, 2]**2)
         return torch.exp(-ang_vel_error / self.reward_cfg["tracking_sigma"])
 
     def _reward_action_rate(self):
         # Penalize changes in actions
+        import pdb; pdb.set_trace()
         return torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
     def _reward_base_pitch_yaw_tilt(self):
@@ -545,6 +548,7 @@ class FigureEnv:
     def _reward_final_body_pose_terminal(self):
         # Terminal body pose
         # assert False, "Untested"
+        import pdb; pdb.set_trace()
         return torch.sum(torch.square(self.dof_pos - downward_facing_dog[self.dofs_idx]), dim=1)
 
 
