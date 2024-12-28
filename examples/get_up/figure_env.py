@@ -14,39 +14,101 @@ else:
 
 # from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
 
+def get_train_cfg(exp_name, max_iterations):
 
-# joint_names = [
-#     "left.hip_z",
-#     "left.hip_x",
-#     "left.hip_y",
-#     "left.knee",
-#     "left.ankle_y",
-#     "left.ankle_x",
-#     "left.shoulder_j1",
-#     "left.shoulder_j2",
-#     "left.upper_arm_twist",
-#     "left.elbow",
-#     "left.wrist_roll",
-#     "left.wrist_pitch",
-#     "left.wrist_yaw",
-#     "right.hip_z",
-#     "right.hip_x",
-#     "right.hip_y",
-#     "right.knee",
-#     "right.ankle_y",
-#     "right.ankle_x",
-#     "right.shoulder_j1",
-#     "right.shoulder_j2",
-#     "right.upper_arm_twist",
-#     "right.elbow",
-#     "right.wrist_roll",
-#     "right.wrist_pitch",
-#     "right.wrist_yaw",
-#     "spine_x",
-#     "spine_z",
-#     "neck_no",
-#     "nexk_yes",
-# ]
+    train_cfg_dict = {
+        "algorithm": {
+            "clip_param": 0.2,
+            "desired_kl": 0.01,
+            "entropy_coef": 0.01,
+            "gamma": 0.99,
+            "lam": 0.95,
+            "learning_rate": 0.001,
+            "max_grad_norm": 1.0,
+            "num_learning_epochs": 5,
+            "num_mini_batches": 4,
+            "schedule": "adaptive",
+            "use_clipped_value_loss": True,
+            "value_loss_coef": 1.0,
+        },
+        "init_member_classes": {},
+        "policy": {
+            "activation": "elu",
+            "actor_hidden_dims": [512, 256, 128],
+            "critic_hidden_dims": [512, 256, 128],
+            "init_noise_std": 1.0,
+        },
+        "runner": {
+            "algorithm_class_name": "PPO",
+            "checkpoint": -1,
+            "experiment_name": exp_name,
+            "load_run": -1,
+            "log_interval": 1,
+            "max_iterations": max_iterations,
+            "num_steps_per_env": 24,
+            "policy_class_name": "ActorCritic",
+            "record_interval": -1,
+            "resume": False,
+            "resume_path": None,
+            "run_name": "",
+            "runner_class_name": "runner_class_name",
+            "save_interval": 100,
+        },
+        "runner_class_name": "OnPolicyRunner",
+        "seed": 1,
+    }
+
+    return train_cfg_dict
+
+
+def get_cfgs():
+    env_cfg = {
+        "num_actions": 30, # NOTE: For now, set as many as dofs. Later, exclude neck and others
+        # termination
+        "termination_if_roll_greater_than": 10,  # degree
+        "termination_if_pitch_greater_than": 10,
+        # base pose
+        "base_init_pos": [0.0, 0.0, 0.3],
+        "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
+        "episode_length_s": 20.0,
+        "resampling_time_s": 4.0,
+        "action_scale": 0.25,
+        "simulate_action_latency": True,
+        "clip_actions": 100.0,
+    }
+    obs_cfg = {
+        "num_obs": 72,
+        "obs_scales": {
+            "lin_vel": 1.0,
+            "ang_vel": 1.0,
+            "base_euler": 0.1,
+            "projected_gravity": 1.0,
+            "dof_pos": 1.0,
+            "dof_vel": 1.0,
+            "actions": 1.0,
+        },
+    }
+    reward_cfg = {
+        "tracking_sigma": 0.2,
+        "reward_scales": {
+            "zero_lateral_base_vel": 1.0,
+            "zero_base_yaw_twist": 1.0,
+            "action_rate": 0.005,
+            "base_pitch_yaw_tilt": 1.0,
+            "com_position_rt_base": 1.0,
+            "com_position_rt_base_terminal": 1.0,
+            "final_body_pose_terminal": 10.0,
+            "final_body_pose": 1.0,
+        },
+    }
+    command_cfg = {
+        "num_commands": 3,
+        "lin_vel_x_range": [0.5, 0.5],
+        "lin_vel_y_range": [0, 0],
+        "ang_vel_range": [0, 0],
+    }
+
+    return env_cfg, obs_cfg, reward_cfg, command_cfg
 
 KP = {
     "left.hip_z": 300,
@@ -305,8 +367,6 @@ class FigureEnv:
             show_viewer=show_viewer,
         )
 
-
-
         # add plain
         self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
 
@@ -359,9 +419,11 @@ class FigureEnv:
         # prepare reward functions and multiply reward scales by dt
         self.reward_functions, self.episode_sums = dict(), dict()
         for name in self.reward_scales.keys():
-            self.reward_scales[name] *= self.dt
+            self.reward_scales[name] *= self.dt # same as scaling the average reward by the total time (i.e., longer episodes, higher reward), while the average reward is the sum of instantaneous rewards divided by the number of time steps
             self.reward_functions[name] = getattr(self, "_reward_" + name)
             self.episode_sums[name] = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
+
+        print("self.reward_scales: ", self.reward_scales)
 
         # initialize buffers
         self.base_lin_vel = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
@@ -376,11 +438,6 @@ class FigureEnv:
         self.reset_buf = torch.ones((self.num_envs,), device=self.device, dtype=gs.tc_int)
         self.episode_length_buf = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_int)
         self.commands = torch.zeros((self.num_envs, self.num_commands), device=self.device, dtype=gs.tc_float)
-        self.commands_scale = torch.tensor(
-            [self.obs_scales["lin_vel"], self.obs_scales["lin_vel"], self.obs_scales["ang_vel"]],
-            device=self.device,
-            dtype=gs.tc_float,
-        )
         self.actions = torch.zeros((self.num_envs, self.num_actions), device=self.device, dtype=gs.tc_float)
         self.last_actions = torch.zeros_like(self.actions)
         self.dof_pos = torch.zeros_like(self.actions)
@@ -400,15 +457,16 @@ class FigureEnv:
         )
         self.extras = dict()  # extra information for logging
 
-    def _resample_commands(self, envs_idx):
-        self.commands[envs_idx, 0] = gs_rand_float(*self.command_cfg["lin_vel_x_range"], (len(envs_idx),), self.device)
-        self.commands[envs_idx, 1] = gs_rand_float(*self.command_cfg["lin_vel_y_range"], (len(envs_idx),), self.device)
-        self.commands[envs_idx, 2] = gs_rand_float(*self.command_cfg["ang_vel_range"], (len(envs_idx),), self.device)
-
     def step(self, actions):
         self.actions = torch.clip(actions, -self.env_cfg["clip_actions"], self.env_cfg["clip_actions"])
         exec_actions = self.last_actions if self.simulate_action_latency else self.actions
-        target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.default_dof_pos
+        
+        # Learn deviations from the initial body pose
+        # target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.default_dof_pos
+
+        # Learn delta actions
+        target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.dof_pos
+
         self.robot.control_dofs_position(target_dof_pos, self.motor_dofs)
         self.scene.step()
 
@@ -416,7 +474,7 @@ class FigureEnv:
         self.episode_length_buf += 1
         self.base_pos[:] = self.robot.get_pos()
         self.base_quat[:] = self.robot.get_quat()
-        self.base_euler = quat_to_xyz(
+        self.base_euler = quat_to_xyz( # [deg]
             transform_quat_by_quat(torch.ones_like(self.base_quat) * self.inv_base_init_quat, self.base_quat)
         )
         inv_base_quat = inv_quat(self.base_quat)
@@ -432,7 +490,6 @@ class FigureEnv:
             .nonzero(as_tuple=False)
             .flatten()
         )
-        self._resample_commands(envs_idx)
 
         # check termination and reset
         self.reset_buf = self.episode_length_buf > self.max_episode_length
@@ -455,19 +512,33 @@ class FigureEnv:
         # compute observations
         self.obs_buf = torch.cat(
             [
+                self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
                 self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
-                self.projected_gravity,  # 3
-                self.commands * self.commands_scale,  # 3
-                (self.dof_pos - self.default_dof_pos) * self.obs_scales["dof_pos"],  # 12
-                self.dof_vel * self.obs_scales["dof_vel"],  # 12
-                self.actions,  # 12
+                self.base_euler * self.obs_scales["base_euler"],  # 4
+                self.projected_gravity * self.obs_scales["projected_gravity"],  # 3
+                self.dof_pos * self.obs_scales["dof_pos"],  # 30
+                self.actions * self.obs_scales["actions"],  # 30
             ],
             axis=-1,
         )
+        print("self.obs_buf.shape", self.obs_buf.shape)
 
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
 
+        # Collect observation as info
+        self.extras["base_ang_vel"] = self.base_ang_vel
+        self.extras["base_lin_vel"] = self.base_lin_vel
+        self.extras["base_euler"] = self.base_euler
+        self.extras["projected_gravity"] = self.projected_gravity
+        self.extras["dof_pos"] = self.dof_pos
+        self.extras["dof_vel"] = self.dof_vel
+        self.extras["actions"] = self.actions
+        self.extras["last_actions"] = self.last_actions
+        self.extras["episode_length_buf"] = self.episode_length_buf
+        self.extras["reset"] = self.reset_buf
+        self.extras["episode_sums"] = self.episode_sums
+        
         return self.obs_buf, None, self.rew_buf, self.reset_buf, self.extras
 
     def get_observations(self):
@@ -513,8 +584,6 @@ class FigureEnv:
             )
             self.episode_sums[key][envs_idx] = 0.0
 
-        self._resample_commands(envs_idx)
-
     def reset(self):
         self.reset_buf[:] = True
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
@@ -537,12 +606,13 @@ class FigureEnv:
     def _reward_action_rate(self):
         # Penalize changes in actions
         # import pdb; pdb.set_trace()
-        return torch.sum(torch.square(self.last_actions - self.actions), dim=1)
+        return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
     def _reward_base_pitch_yaw_tilt(self):
         # Penalize base tilting: Assuming that the torso will be mostly rotated,
         # we penalize pitch and yaw tilting in Base frame coordinates.
-        return torch.sum(torch.square(self.projected_gravity[:,1::]), dim=1)
+        base_pitch_tilt_error = torch.sum(torch.square(self.projected_gravity[:,1::]), dim=1)
+        return torch.exp(-base_pitch_tilt_error / self.reward_cfg["tracking_sigma"])
 
     def _reward_com_position_rt_base(self):
         # Penalize COM position such that it gets closer and closer to be between the feet
@@ -553,12 +623,17 @@ class FigureEnv:
         return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
     def _reward_final_body_pose_terminal(self):
+        final_pos_error = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
+        
         self.rew_buf_terminal[:] = 0.0
-        self.rew_buf_terminal[self.reset_buf] = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
+        self.rew_buf_terminal[self.reset_buf] = -final_pos_error
+
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
         return self.rew_buf_terminal
+    
+    def _reward_final_body_pose(self):
 
-    # def _reward_similar_to_default(self):
-    #     # Penalize joint poses far away from default pose
-    #     return torch.sum(torch.abs(self.dof_pos - self.default_dof_pos), dim=1)
-
+        final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
+        
+        #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
+        return -final_pos_error
