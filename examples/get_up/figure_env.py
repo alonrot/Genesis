@@ -524,7 +524,7 @@ class FigureEnv:
 
     def _reward_zero_base_yaw_twist(self):
         # Penalize yaw twist component
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         ang_vel_error = torch.sum(self.base_ang_vel[:, 2]**2)
         return torch.exp(-ang_vel_error / self.reward_cfg["tracking_sigma"])
 
