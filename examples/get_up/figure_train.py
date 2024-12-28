@@ -115,7 +115,8 @@ def main():
     parser.add_argument("--max_iterations", type=int, default=100)
     args = parser.parse_args()
 
-    gs.init(logging_level="info")
+    backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
+    gs.init(logging_level="info", backend=backend)
 
     log_dir = f"logs/{args.exp_name}"
     env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()

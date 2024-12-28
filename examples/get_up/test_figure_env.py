@@ -110,7 +110,8 @@ def get_cfgs():
 
 def main():
 
-    gs.init(logging_level="info", backend=gs.constants.backend.cpu)
+    backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
+    gs.init(logging_level="info", backend=backend)
 
     env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()
 
