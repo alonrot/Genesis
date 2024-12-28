@@ -5,9 +5,9 @@ import genesis as gs
 from time import time
 
 import pdb
-from skeleton_properties import KP, KD, torque_lb, torque_ub
+from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
 
-from pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
+from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
 
 def main():
 
@@ -130,6 +130,44 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
 
         joint_positions_desired = simple_ramp_from_current_to_desired_pose(joint_positions_desired, joint_positions_target, alpha)
 
+
+        # # Add fingers:
+        # joint_names_with_fingers = list(joint_names) + [
+        #     "left.thumb_rotate",
+        #     "left.THJ1",
+        #     "left.FFJ1",
+        #     "left.MFJ1",
+        #     "left.RFJ1",
+        #     "left.LFJ1",
+        #     "right.thumb_rotate",
+        #     "right.THJ1",
+        #     "right.FFJ1",
+        #     "right.MFJ1",
+        #     "right.RFJ1",
+        #     "right.LFJ1",
+        # ]
+
+        # joint_positions_desired_with_fingers = np.concatenate((joint_positions_desired,np.array([
+        #     1.74533,
+        #     2.234025,
+        #     2.234025,
+        #     2.234025,
+        #     2.234025,
+        #     2.234025,
+        #     1.74533,
+        #     2.234025,
+        #     2.234025,
+        #     2.234025,
+        #     2.234025,
+        #     2.234025])))
+
+        # print("joint_positions_desired_with_fingers: ", joint_positions_desired_with_fingers)
+
+        # dofs_idx_with_fin = [robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
+        # robot.control_dofs_position(joint_positions_desired_with_fingers, dofs_idx_with_fin)
+
+
+        dofs_idx = [robot.get_joint(name).dof_idx_local for name in joint_names]
         robot.control_dofs_position(joint_positions_desired, dofs_idx)
 
         scene.step()
