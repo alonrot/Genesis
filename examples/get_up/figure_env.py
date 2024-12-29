@@ -496,7 +496,7 @@ class FigureEnv:
             dtype=gs.tc_float,
         )
         self.terminal_dof_pos = torch.tensor(
-            [to_crawl[name] for name in joint_names],
+            [crawl_pose_elbows_semi_flexed[name] for name in joint_names],
             device=self.device,
             dtype=gs.tc_float,
         )
