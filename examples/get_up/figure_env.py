@@ -63,10 +63,10 @@ def get_train_cfg(exp_name, max_iterations):
 
 def get_cfgs():
     env_cfg = {
-        "num_actions": 30, # NOTE: For now, set as many as dofs. Later, exclude neck and others
+        "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 20,  # degree
-        "termination_if_pitch_greater_than": 20,
+        "termination_if_roll_greater_than": 10,  # degree
+        "termination_if_pitch_greater_than": 10,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.3],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
@@ -77,7 +77,7 @@ def get_cfgs():
         "clip_actions": 100.0,
     }
     obs_cfg = {
-        "num_obs": 72,
+        "num_obs": 56,
         "obs_scales": {
             "lin_vel": 1.0,
             "ang_vel": 1.0,
@@ -270,8 +270,8 @@ downward_facing_dog = {
   "right.wrist_roll": 0.00408184,
   "right.wrist_pitch": -0.0856984,
   "right.wrist_yaw": 0.286192,
-  "neck_no": -7.58171e-05,
-  "neck_yes": 0.000681877,
+  "neck_no": 0.0,
+  "neck_yes": 0.0,
 }
 
 crawl_pose_elbows_semi_flexed = {
@@ -313,6 +313,24 @@ crawl_pose_elbows_semi_flexed = {
 }
 
 
+learnable_joints = [
+    "left.hip_y",
+    "left.knee",
+    "left.ankle_y",
+    "left.shoulder_j1",
+    "left.elbow",
+    "left.wrist_roll",
+    "left.wrist_yaw",
+    "right.hip_y",
+    "right.knee",
+    "right.ankle_y",
+    "right.shoulder_j1",
+    "right.elbow",
+    "right.wrist_roll",
+    "right.wrist_yaw",
+]
+
+
 
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
@@ -344,7 +362,7 @@ class FigureEnv:
         self.num_obs = obs_cfg["num_obs"]
         self.num_privileged_obs = None
         self.num_actions = env_cfg["num_actions"]
-        assert self.num_actions == len(KP) == len(KD), "Number of actions must match number of joints (for now)"
+        # assert self.num_actions == len(KP) == len(KD), "Number of actions must match number of joints (for now)"
 
         self.simulate_action_latency = True  # there is a 1 step latency on real robot
         self.dt = 0.02  # control frequence on real robot is 50hz
@@ -396,13 +414,14 @@ class FigureEnv:
         joint_names = KP.keys()
         assert all(name in KD.keys() for name in joint_names)
 
-        self.dofs_idx = [self.robot.get_joint(name).dof_idx_local for name in joint_names]
-
         # build
         self.scene.build(n_envs=self.num_envs)
 
         # names to indices
         self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in joint_names]
+
+        # Indices of the controlled joints
+        self.idx_controlled_joints = [self.robot.get_joint(name).dof_idx_local for name in learnable_joints]
 
         # PD control parameters
         # self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
@@ -411,19 +430,19 @@ class FigureEnv:
         # set positional gains
         self.robot.set_dofs_kp(
             kp             = np.array([KP[joint_name] for joint_name in joint_names]),
-            dofs_idx_local = self.dofs_idx,
+            dofs_idx_local = self.motor_dofs,
         )
         # set velocity gains
         self.robot.set_dofs_kv(
             kv             = np.array([KD[joint_name] for joint_name in joint_names]),
-            dofs_idx_local = self.dofs_idx,
+            dofs_idx_local = self.motor_dofs,
         )
 
         # set force range for safety
         self.robot.set_dofs_force_range(
             lower          = np.array([torque_lb[joint_name] for joint_name in joint_names]),
             upper          = np.array([torque_ub[joint_name] for joint_name in joint_names]),
-            dofs_idx_local = self.dofs_idx,
+            dofs_idx_local = self.motor_dofs,
         )
 
         # prepare reward functions and multiply reward scales by dt
@@ -449,9 +468,12 @@ class FigureEnv:
         self.episode_length_buf = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_int)
         self.actions = torch.zeros((self.num_envs, self.num_actions), device=self.device, dtype=gs.tc_float)
         self.last_actions = torch.zeros_like(self.actions)
-        self.dof_pos = torch.zeros_like(self.actions)
-        self.dof_vel = torch.zeros_like(self.actions)
-        self.last_dof_vel = torch.zeros_like(self.actions)
+        # self.dof_pos = torch.zeros_like(self.actions)
+        # self.dof_vel = torch.zeros_like(self.actions)
+        # self.last_dof_vel = torch.zeros_like(self.actions)
+        self.dof_pos = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
+        self.dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
+        self.last_dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
         self.base_quat = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
         self.default_dof_pos = torch.tensor(
@@ -477,10 +499,28 @@ class FigureEnv:
         # Learn deviations from the initial body pose
         # target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.default_dof_pos
 
-        # Learn delta actions
-        target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.dof_pos
+        # # Learn delta actions
+        # target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.dof_pos
 
-        self.robot.control_dofs_position(target_dof_pos, self.motor_dofs)
+        # Learn delta actions for controlled joints only
+        target_controlled_joints_pos_current_plus_actions = exec_actions * self.env_cfg["action_scale"] + self.robot.get_dofs_position(self.idx_controlled_joints)
+
+        target_joints_pos_to_send = self.robot.get_dofs_position(self.motor_dofs)
+        # print("target_controlled_joints_pos_current_plus_actions.shape: ", target_controlled_joints_pos_current_plus_actions.shape)
+        # print("target_joints_pos_to_send.shape: ", target_joints_pos_to_send.shape)
+        
+        # Add target_controlled_joints_pos_current_plus_actions to target_joints_pos_to_send in the right indices
+        # print("self.idx_controlled_joints: ", self.idx_controlled_joints)
+        # print("self.motor_dofs: ", self.motor_dofs)
+        for idx in self.idx_controlled_joints:
+            idx_local = self.motor_dofs.index(idx)
+            target_joints_pos_to_send[0,idx_local] = target_controlled_joints_pos_current_plus_actions[0,self.idx_controlled_joints.index(idx)]
+
+        self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
+
+        # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
+
+        # self.robot.control_dofs_position(target_dof_pos, self.motor_dofs)
         self.scene.step()
 
         # update buffers
@@ -522,6 +562,7 @@ class FigureEnv:
             self.rew_buf += rew
             self.episode_sums[name] += rew
 
+
         # compute observations
         self.obs_buf = torch.cat(
             [
@@ -530,7 +571,7 @@ class FigureEnv:
                 self.base_euler * self.obs_scales["base_euler"],  # 4
                 self.projected_gravity * self.obs_scales["projected_gravity"],  # 3
                 self.dof_pos * self.obs_scales["dof_pos"],  # 30
-                self.actions * self.obs_scales["actions"],  # 30
+                self.actions * self.obs_scales["actions"],  # 14
             ],
             axis=-1,
         )

@@ -25,7 +25,7 @@ def main():
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
     gs.init(logging_level="info", backend=backend)
 
-    env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()
+    env_cfg, obs_cfg, reward_cfg = get_cfgs()
 
     env = FigureEnv(
         num_envs=args.n_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, show_viewer=True,

@@ -27,7 +27,7 @@ def main():
     gs.init(logging_level="info", backend=backend)
 
     log_dir = f"logs/{args.exp_name}/"
-    env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(open(f"logs/{args.exp_name}/cfgs.pkl", "rb"))
+    env_cfg, obs_cfg, reward_cfg, train_cfg = pickle.load(open(f"logs/{args.exp_name}/cfgs.pkl", "rb"))
 
     writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
