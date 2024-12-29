@@ -12,7 +12,7 @@ else:
 
 # from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
 
-# from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
+from genesis.pose_library import to_crawl
 
 def get_train_cfg(exp_name, max_iterations):
 
@@ -496,7 +496,7 @@ class FigureEnv:
             dtype=gs.tc_float,
         )
         self.terminal_dof_pos = torch.tensor(
-            [downward_facing_dog[name] for name in joint_names],
+            [to_crawl[name] for name in joint_names],
             device=self.device,
             dtype=gs.tc_float,
         )
