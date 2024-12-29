@@ -3,7 +3,7 @@ import os
 import pickle
 import shutil
 
-from figure_env import FigureEnv
+from figure_env import FigureEnv, add2tensorboard
 from rsl_rl.runners import OnPolicyRunner
 from datetime import datetime
 
@@ -57,14 +57,20 @@ def main():
 
 def run_sim(env, policy, writer):
     obs, _ = env.reset()
+    iter = 0
     with torch.no_grad():
         while True:
             actions = policy(obs)
             obs, _, rews, dones, infos = env.step(actions)
 
-            print("done", dones)
-            print("infos[episode_length_buf]: ", infos["episode_length_buf"])
-            print("infos[reset]: ", infos["reset"])
+            # print("done", dones)
+            # print("infos[episode_length_buf]: ", infos["episode_length_buf"])
+            # print("infos[reset]: ", infos["reset"])
+
+            add2tensorboard(writer, infos, iter)
+
+            iter += 1
+
 
 def run_sim_random_actions(env, policy, writer):
     obs, _ = env.reset()
@@ -73,6 +79,8 @@ def run_sim_random_actions(env, policy, writer):
         while True:
             actions_rand = torch.rand((env.num_envs, env.num_actions), device=env.device, dtype=gs.tc_float) * 2 - 1
             obs, _, rews, dones, infos = env.step(actions_rand)
+
+            add2tensorboard(writer, infos, iter)
 
             iter += 1
 

@@ -20,6 +20,7 @@ def main():
     parser.add_argument("-e", "--exp_name", type=str, default="getup")
     parser.add_argument("-B", "--num_envs", type=int, default=4096)
     parser.add_argument("--max_iterations", type=int, default=500)
+    parser.add_argument("-v", "--vis", action="store_true", default=False)
     args = parser.parse_args()
 
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
@@ -48,6 +49,13 @@ def main():
 
     runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=True)
 
+#     gs.tools.run_in_another_thread(fn=run, args=(runner, args.max_iterations))
+   
+#     if args.vis:
+#         env.scene.viewer.start()
+
+# def run(runner, max_iterations):
+#     runner.learn(num_learning_iterations=max_iterations, init_at_random_ep_len=True)
 
 if __name__ == "__main__":
     main()

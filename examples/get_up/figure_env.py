@@ -66,7 +66,7 @@ def get_cfgs():
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
         "termination_if_roll_greater_than": 10,  # degree
-        "termination_if_pitch_greater_than": 10,
+        "termination_if_yaw_greater_than": 10,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.3],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
@@ -77,11 +77,12 @@ def get_cfgs():
         "clip_actions": 100.0,
     }
     obs_cfg = {
-        "num_obs": 56,
+        "num_obs": 59,
         "obs_scales": {
             "lin_vel": 1.0,
             "ang_vel": 1.0,
             "base_euler": 0.1,
+            "base_pos": 0.1,
             "projected_gravity": 1.0,
             "dof_pos": 1.0,
             "dof_vel": 1.0,
@@ -91,10 +92,10 @@ def get_cfgs():
     reward_cfg = {
         "tracking_sigma": 0.2,
         "reward_scales": {
-            "zero_lateral_base_vel": 1.0,
-            "zero_base_yaw_twist": 1.0,
-            "action_rate": 0.005,
-            "base_pitch_yaw_tilt": 1.0,
+            "zero_lateral_base_vel": 0.01,
+            "zero_base_yaw_twist": 0.01,
+            "action_rate": 0.5,
+            "base_pitch_tilt": 1.0,
             "com_position_rt_base": 1.0,
             "com_position_rt_base_terminal": 1.0,
             # "final_body_pose_terminal": 10.0,
@@ -330,7 +331,20 @@ learnable_joints = [
     "right.wrist_yaw",
 ]
 
-
+joint_names_fingers = [
+    "left.thumb_rotate",
+    "left.THJ1",
+    "left.FFJ1",
+    "left.MFJ1",
+    "left.RFJ1",
+    "left.LFJ1",
+    "right.thumb_rotate",
+    "right.THJ1",
+    "right.FFJ1",
+    "right.MFJ1",
+    "right.RFJ1",
+    "right.LFJ1",
+]
 
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
@@ -516,9 +530,15 @@ class FigureEnv:
             idx_local = self.motor_dofs.index(idx)
             target_joints_pos_to_send[0,idx_local] = target_controlled_joints_pos_current_plus_actions[0,self.idx_controlled_joints.index(idx)]
 
+
         self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
+        
 
         # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
+        # joint_names_with_fingers = list(joint_names) + joint_names_fingers
+        # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
+        # target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send, torch.tensor([[1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025]])), axis=1)
+        # self.robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, self.motor_dofs_with_fingers)
 
         # self.robot.control_dofs_position(target_dof_pos, self.motor_dofs)
         self.scene.step()
@@ -546,8 +566,8 @@ class FigureEnv:
 
         # check termination and reset
         self.reset_buf = self.episode_length_buf > self.max_episode_length
-        # self.reset_buf |= torch.abs(self.base_euler[:, 1]) > self.env_cfg["termination_if_pitch_greater_than"]
-        # self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
+        self.reset_buf |= torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
+        self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
         self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
@@ -568,7 +588,8 @@ class FigureEnv:
             [
                 self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
                 self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
-                self.base_euler * self.obs_scales["base_euler"],  # 4
+                self.base_euler * self.obs_scales["base_euler"],  # 3
+                self.base_pos * self.obs_scales["base_pos"],  # 3
                 self.projected_gravity * self.obs_scales["projected_gravity"],  # 3
                 self.dof_pos * self.obs_scales["dof_pos"],  # 30
                 self.actions * self.obs_scales["actions"],  # 14
@@ -592,9 +613,9 @@ class FigureEnv:
         self.extras["reset"] = self.reset_buf
         self.extras["episode_sums"] = self.episode_sums
         
-        if self.writer is not None:
-            add2tensorboard(self.writer, self.extras, self.global_counter)
-            self.global_counter += 1
+        # if self.writer is not None:
+        #     add2tensorboard(self.writer, self.extras, self.global_counter)
+        #     self.global_counter += 1
 
         if torch.any(self.reset_buf):
             print("self.episode_length_buf: ", self.episode_length_buf)
@@ -668,10 +689,16 @@ class FigureEnv:
         # import pdb; pdb.set_trace()
         return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
-    def _reward_base_pitch_yaw_tilt(self):
+    # def _reward_base_pitch_yaw_tilt(self):
+    #     # Penalize base tilting: Assuming that the torso will be mostly rotated,
+    #     # we penalize pitch and yaw tilting in Base frame coordinates.
+    #     base_pitch_tilt_error = torch.sum(torch.square(self.projected_gravity[:,1::]), dim=1)
+    #     return torch.exp(-base_pitch_tilt_error / self.reward_cfg["tracking_sigma"])
+
+    def _reward_base_pitch_tilt(self):
         # Penalize base tilting: Assuming that the torso will be mostly rotated,
         # we penalize pitch and yaw tilting in Base frame coordinates.
-        base_pitch_tilt_error = torch.sum(torch.square(self.projected_gravity[:,1::]), dim=1)
+        base_pitch_tilt_error = torch.sum(torch.square(self.projected_gravity[:,1:2]), dim=1)
         return torch.exp(-base_pitch_tilt_error / self.reward_cfg["tracking_sigma"])
 
     def _reward_com_position_rt_base(self):
