@@ -97,18 +97,12 @@ def get_cfgs():
             "base_pitch_yaw_tilt": 1.0,
             "com_position_rt_base": 1.0,
             "com_position_rt_base_terminal": 1.0,
-            "final_body_pose_terminal": 10.0,
-            "final_body_pose": 1.0,
+            # "final_body_pose_terminal": 10.0,
+            "final_body_pose": 50.0,
         },
     }
-    command_cfg = {
-        "num_commands": 3,
-        "lin_vel_x_range": [0.5, 0.5],
-        "lin_vel_y_range": [0, 0],
-        "ang_vel_range": [0, 0],
-    }
 
-    return env_cfg, obs_cfg, reward_cfg, command_cfg
+    return env_cfg, obs_cfg, reward_cfg
 
 KP = {
     "left.hip_z": 300,
@@ -324,8 +318,26 @@ def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
 
 
+def add2tensorboard(writer, infos, iter):
+
+    for key, value in infos.items():
+
+        if not isinstance(value, dict):
+
+            if key in ["base_lin_vel", "base_ang_vel", "base_euler", "projected_gravity"]:
+                value_one_env = value[0] # take the first environment
+                writer.add_scalars('Observations/' + key, {"x": value_one_env[0],"y": value_one_env[1],"z": value_one_env[2]}, iter)
+            elif key in ["reset", "episode_length_buf"]:
+                value_one_env = value[0] # take the first environment
+                writer.add_scalar('Observations/' + key, value_one_env, iter)
+
+        elif key == "episode_sums":
+            for k, v in value.items():
+                value_one_env = v[0] # take the first environment
+                writer.add_scalar('Rewards/' + k, value_one_env, iter)
+
 class FigureEnv:
-    def __init__(self, num_envs, env_cfg, obs_cfg, reward_cfg, command_cfg, show_viewer=False, device="cpu"):
+    def __init__(self, num_envs, env_cfg, obs_cfg, reward_cfg, show_viewer=False, device="cpu", writer=None):
         self.device = torch.device(device)
 
         self.num_envs = num_envs
@@ -333,7 +345,6 @@ class FigureEnv:
         self.num_privileged_obs = None
         self.num_actions = env_cfg["num_actions"]
         assert self.num_actions == len(KP) == len(KD), "Number of actions must match number of joints (for now)"
-        self.num_commands = command_cfg["num_commands"]
 
         self.simulate_action_latency = True  # there is a 1 step latency on real robot
         self.dt = 0.02  # control frequence on real robot is 50hz
@@ -342,7 +353,6 @@ class FigureEnv:
         self.env_cfg = env_cfg
         self.obs_cfg = obs_cfg
         self.reward_cfg = reward_cfg
-        self.command_cfg = command_cfg
 
         self.obs_scales = obs_cfg["obs_scales"]
         self.reward_scales = reward_cfg["reward_scales"]
@@ -437,7 +447,6 @@ class FigureEnv:
         self.rew_buf_terminal = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
         self.reset_buf = torch.ones((self.num_envs,), device=self.device, dtype=gs.tc_int)
         self.episode_length_buf = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_int)
-        self.commands = torch.zeros((self.num_envs, self.num_commands), device=self.device, dtype=gs.tc_float)
         self.actions = torch.zeros((self.num_envs, self.num_actions), device=self.device, dtype=gs.tc_float)
         self.last_actions = torch.zeros_like(self.actions)
         self.dof_pos = torch.zeros_like(self.actions)
@@ -456,6 +465,10 @@ class FigureEnv:
             dtype=gs.tc_float,
         )
         self.extras = dict()  # extra information for logging
+        
+        # Tensorboard writer
+        self.writer = writer
+        self.global_counter = 0
 
     def step(self, actions):
         self.actions = torch.clip(actions, -self.env_cfg["clip_actions"], self.env_cfg["clip_actions"])
@@ -493,8 +506,8 @@ class FigureEnv:
 
         # check termination and reset
         self.reset_buf = self.episode_length_buf > self.max_episode_length
-        self.reset_buf |= torch.abs(self.base_euler[:, 1]) > self.env_cfg["termination_if_pitch_greater_than"]
-        self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
+        # self.reset_buf |= torch.abs(self.base_euler[:, 1]) > self.env_cfg["termination_if_pitch_greater_than"]
+        # self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
         self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
@@ -521,7 +534,6 @@ class FigureEnv:
             ],
             axis=-1,
         )
-        print("self.obs_buf.shape", self.obs_buf.shape)
 
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
@@ -539,6 +551,13 @@ class FigureEnv:
         self.extras["reset"] = self.reset_buf
         self.extras["episode_sums"] = self.episode_sums
         
+        if self.writer is not None:
+            add2tensorboard(self.writer, self.extras, self.global_counter)
+            self.global_counter += 1
+
+        if torch.any(self.reset_buf):
+            print("self.episode_length_buf: ", self.episode_length_buf)
+
         return self.obs_buf, None, self.rew_buf, self.reset_buf, self.extras
 
     def get_observations(self):
@@ -622,17 +641,16 @@ class FigureEnv:
         # Terminal cost
         return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
-    def _reward_final_body_pose_terminal(self):
-        final_pos_error = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
+    # def _reward_final_body_pose_terminal(self):
+    #     final_pos_error = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
         
-        self.rew_buf_terminal[:] = 0.0
-        self.rew_buf_terminal[self.reset_buf] = -final_pos_error
+    #     self.rew_buf_terminal[:] = 0.0
+    #     self.rew_buf_terminal[self.reset_buf] = -final_pos_error
 
-        #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
-        return self.rew_buf_terminal
+    #     #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
+    #     return self.rew_buf_terminal
     
     def _reward_final_body_pose(self):
-
         final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
         
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?

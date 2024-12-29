@@ -26,12 +26,13 @@ def main():
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
     gs.init(logging_level="info", backend=backend)
 
-    log_dir = f"logs/{args.exp_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}/"
+    log_dir = f"logs/{args.exp_name}/"
     env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(open(f"logs/{args.exp_name}/cfgs.pkl", "rb"))
-    reward_cfg["reward_scales"] = {}
+
+    writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
     env = FigureEnv(
-        num_envs=1, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device=device, show_viewer=True,
+        num_envs=1, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, show_viewer=True, writer=writer
     )
 
     print("Creating runner")
@@ -45,8 +46,6 @@ def main():
     policy = runner.get_inference_policy(device=device)
 
     print("Running sim")
-
-    writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
     if args.rand_actions:
         gs.tools.run_in_another_thread(fn=run_sim_random_actions, args=(env, policy, writer))
@@ -63,6 +62,10 @@ def run_sim(env, policy, writer):
             actions = policy(obs)
             obs, _, rews, dones, infos = env.step(actions)
 
+            print("done", dones)
+            print("infos[episode_length_buf]: ", infos["episode_length_buf"])
+            print("infos[reset]: ", infos["reset"])
+
 def run_sim_random_actions(env, policy, writer):
     obs, _ = env.reset()
     iter = 0
@@ -70,9 +73,6 @@ def run_sim_random_actions(env, policy, writer):
         while True:
             actions_rand = torch.rand((env.num_envs, env.num_actions), device=env.device, dtype=gs.tc_float) * 2 - 1
             obs, _, rews, dones, infos = env.step(actions_rand)
-
-            for key, value in infos.items():
-                writer.add_scalar('Episode/' + key, value, iter)
 
             iter += 1
 

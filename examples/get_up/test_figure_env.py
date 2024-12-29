@@ -4,7 +4,7 @@ import pickle
 import shutil
 from datetime import datetime
 
-from figure_env import FigureEnv, get_cfgs
+from figure_env import FigureEnv, get_cfgs, add2tensorboard
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
@@ -28,7 +28,7 @@ def main():
     env_cfg, obs_cfg, reward_cfg, command_cfg = get_cfgs()
 
     env = FigureEnv(
-        num_envs=args.n_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg, device=device, show_viewer=True,
+        num_envs=args.n_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, show_viewer=True,
     )
 
     # Create log_dir name using time of day as YYYYMMDD_HHmmSS
@@ -47,17 +47,6 @@ def run_sim_random_actions(env, writer):
         while True:
             actions_rand = torch.rand((env.num_envs, env.num_actions), device=env.device, dtype=gs.tc_float) * 2 - 1
             obs, _, rews, dones, infos = env.step(actions_rand)
-
-            for key, value in infos.items():
-                if not isinstance(value, dict):
-
-                    if key in ["base_lin_vel", "base_ang_vel", "base_euler", "projected_gravity"]:
-                        value_one_env = value[0] # take the first environment
-                        writer.add_scalars('Observations/' + key, {"x": value_one_env[0],"y": value_one_env[1],"z": value_one_env[2]}, iter)
-
-                elif key == "episode_sums":
-                    for k, v in value.items():
-                        writer.add_scalar('Rewards/' + k, v, iter)
 
             iter += 1
 
