@@ -72,7 +72,7 @@ def get_cfgs():
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
         "resampling_time_s": 4.0,
-        "action_scale": 0.25,
+        "action_scale": 1.0,
         "simulate_action_latency": True,
         "clip_actions": 100.0,
     }
