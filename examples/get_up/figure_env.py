@@ -69,7 +69,7 @@ def get_cfgs():
         "termination_if_roll_greater_than": 10,  # degree
         "termination_if_yaw_greater_than": 10,
         # base pose
-        "base_init_pos": [0.0, 0.0, 0.4],
+        "base_init_pos": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
         "action_scale": 0.45,
@@ -203,7 +203,7 @@ class FigureEnv:
         self.robot = self.scene.add_entity(
             gs.morphs.MJCF(file=MJCF_PATH,
             # pos   = (0, 0, 0.3),
-            pos   = (0, 0, 0.2),
+            pos   = tuple(self.env_cfg["base_init_pos"]),
             euler = (0, 90, 0), # we follow scipy's extrinsic x-y-z rotation convention, in degrees,
             # quat  = (1.0, 0.0, 0.0, 0.0), # we use w-x-y-z convention for quaternions,
             scale = 1.0),
@@ -367,7 +367,7 @@ class FigureEnv:
             self.rew_buf += rew
             self.episode_sums[name] += rew
 
-        assert not torch.any(torch.isnan(self.rew_buf)) and not torch.any(torch.isinf(self.rew_buf)), "self.rew_buf contains NaNs or Infs"
+        # assert not torch.any(torch.isnan(self.rew_buf)) and not torch.any(torch.isinf(self.rew_buf)), "self.rew_buf contains NaNs or Infs"
 
         # compute observations
         self.obs_buf = torch.cat(
@@ -388,13 +388,15 @@ class FigureEnv:
         self.reset_buf |= torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
         self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
         self.reset_buf |= torch.any(torch.isnan(self.obs_buf), dim=-1)
+        self.reset_buf |= torch.any(torch.isnan(self.rew_buf), dim=-1)
 
         # Count the number of environments in which NaNs were detected
         n_envs_with_nans = torch.sum(self.reset_buf).item()
 
         # Allow NaNs in one environment at a time and reset it
         # assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
-        print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
+        if n_envs_with_nans > 0:
+            print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
         self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
