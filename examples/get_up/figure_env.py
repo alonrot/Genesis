@@ -429,11 +429,11 @@ class FigureEnv:
                 print("NaN in self.obs_buf: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
                 print("Inf in self.obs_buf: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
 
-            # Print all the actions:
-            for idx, action in enumerate(self.actions):
-                print("Action ", idx, ": ", action)
-                print("NaN in action ", idx, ": ", torch.isnan(action).nonzero(as_tuple=False))
-                print("Inf in action ", idx, ": ", torch.isinf(action).nonzero(as_tuple=False))
+            # Print min max of actions
+            print("actions: ", self.actions)
+            print("max: ", torch.max(self.actions))
+            print("min: ", torch.min(self.actions))
+
 
             for name, reward_func in self.reward_functions.items():
                 rew = reward_func() * self.reward_scales[name]
