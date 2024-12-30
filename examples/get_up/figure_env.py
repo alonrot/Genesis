@@ -523,15 +523,18 @@ class FigureEnv:
     def _reward_final_body_pose_terminal(self):
         self.rew_buf_terminal[:] = 0.0
         if torch.any(self.reset_buf):
-            final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1))
+            # final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1))
+            final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1))
 
             # print("final_pos_error: ", final_pos_error)
             # print("final_pos_error.shape: ", final_pos_error.shape)
             # import pdb; pdb.set_trace()
 
-            reset_and_near = self.reset_buf & (final_pos_error < self.reward_cfg["terminal_reward_dof_near_threshold"])
-            # print("reset_and_near: ", reset_and_near)
+            is_near = final_pos_error < self.reward_cfg["terminal_reward_dof_near_threshold"]
+            # print("reset_and_near:self.reset_buf ", reset_and_near)
             # print("reset_and_near.shape: ", reset_and_near.shape)
+
+            reset_and_near = torch.logical_and(self.reset_buf, is_near)
 
             self.rew_buf_terminal[reset_and_near] = 1.0
 
