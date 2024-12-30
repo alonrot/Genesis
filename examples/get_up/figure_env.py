@@ -10,9 +10,9 @@ if 'figva' in os.uname()[1]:
 else:
     MJCF_PATH = "/Users/alonrot/work_figure_ai/ws/project-x/robot_config/sim/b_sample/b_sample.xml"
 
-# from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
+from genesis.skeleton_properties import KP,  KD, torque_lb, torque_ub
 
-from genesis.pose_library import to_crawl
+from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, joint_names_fingers
 
 def get_train_cfg(exp_name, max_iterations):
 
@@ -105,214 +105,6 @@ def get_cfgs():
 
     return env_cfg, obs_cfg, reward_cfg
 
-KP = {
-    "left.hip_z": 300,
-    "left.hip_x": 600,
-    "left.hip_y": 600,
-    "left.knee": 800,
-    "left.ankle_y": 150,
-    "left.ankle_x": 80,
-    "left.shoulder_j1": 400,
-    "left.shoulder_j2": 200,
-    "left.upper_arm_twist": 50,
-    "left.elbow": 350,
-    "left.wrist_roll": 25,
-    "left.wrist_pitch": 25,
-    "left.wrist_yaw": 50,
-    "right.hip_z": 300,
-    "right.hip_x": 600,
-    "right.hip_y": 600,
-    "right.knee": 800,
-    "right.ankle_y": 150,
-    "right.ankle_x": 80,
-    "right.shoulder_j1": 400,
-    "right.shoulder_j2": 200,
-    "right.upper_arm_twist": 50,
-    "right.elbow": 350,
-    "right.wrist_roll": 25,
-    "right.wrist_pitch": 25,
-    "right.wrist_yaw": 50,
-    "spine_x": 500,
-    "spine_z": 500,
-    "neck_no": 12.5,
-    "neck_yes": 35
-}
-
-joint_names = [joint_name for joint_name in KP.keys()]
-
-
-KD = {
-    "left.hip_z": 15,
-    "left.hip_x": 15,
-    "left.hip_y": 30,
-    "left.knee": 30,
-    "left.ankle_y": 5,
-    "left.ankle_x": 2,
-    "left.shoulder_j1": 8,
-    "left.shoulder_j2": 15,
-    "left.upper_arm_twist": 5.0,
-    "left.elbow": 4,
-    "left.wrist_roll": 0.75,
-    "left.wrist_pitch": 0.75,
-    "left.wrist_yaw": 0.75,
-    "right.hip_z": 15,
-    "right.hip_x": 15,
-    "right.hip_y": 30,
-    "right.knee": 30,
-    "right.ankle_y": 5,
-    "right.ankle_x": 2,
-    "right.shoulder_j1": 8,
-    "right.shoulder_j2": 15,
-    "right.upper_arm_twist": 5.0,
-    "right.elbow": 4,
-    "right.wrist_roll": 0.75,
-    "right.wrist_pitch": 0.75,
-    "right.wrist_yaw": 0.75,
-    "spine_x": 35,
-    "spine_z": 35,
-    "neck_no": 1,
-    "neck_yes": 1
-}
-
-torque_lb = {
-    "neck_yes": -19.3,
-    "neck_no": -19.3,
-    "left.shoulder_j1": -73.6848,
-    "right.shoulder_j1": -73.6848,
-    "left.shoulder_j2": -73.6848,
-    "right.shoulder_j2": -73.6848,
-    "left.upper_arm_twist": -73.6848,
-    "right.upper_arm_twist": -73.6848,
-    "left.elbow": -73.6848,
-    "right.elbow": -73.6848,
-    "left.wrist_roll": -19.3,
-    "right.wrist_roll": -19.3,
-    "left.wrist_yaw": -19.3,
-    "right.wrist_yaw": -19.3,
-    "left.wrist_pitch": -19.3,
-    "right.wrist_pitch": -19.3,
-    "spine_z": -272.827,
-    "spine_x": -272.827,
-    "left.hip_y": -272.827,
-    "right.hip_y": -272.827,
-    "left.hip_x": -272.827,
-    "right.hip_x": -272.827,
-    "left.hip_z": -272.827,
-    "right.hip_z": -272.827,
-    "left.knee": -272.827,
-    "right.knee": -272.827,
-    "left.ankle_y": -124.764,
-    "right.ankle_y": -124.764,
-    "left.ankle_x": -22.356,
-    "right.ankle_x": -22.356,
-}
-
-
-torque_ub = {
-    "neck_yes": 19.3,
-    "neck_no": 19.3,
-    "left.shoulder_j1": 73.6848,
-    "right.shoulder_j1": 73.6848,
-    "left.shoulder_j2": 73.6848,
-    "right.shoulder_j2": 73.6848,
-    "left.upper_arm_twist": 73.6848,
-    "right.upper_arm_twist": 73.6848,
-    "left.elbow": 73.6848,
-    "right.elbow": 73.6848,
-    "left.wrist_roll": 19.3,
-    "right.wrist_roll": 19.3,
-    "left.wrist_yaw": 19.3,
-    "right.wrist_yaw": 19.3,
-    "left.wrist_pitch": 19.3,
-    "right.wrist_pitch": 19.3,
-    "spine_z": 272.827,
-    "spine_x": 272.827,
-    "left.hip_y": 272.827,
-    "right.hip_y": 272.827,
-    "left.hip_x": 272.827,
-    "right.hip_x": 272.827,
-    "left.hip_z": 272.827,
-    "right.hip_z": 272.827,
-    "left.knee": 272.827,
-    "right.knee": 272.827,
-    "left.ankle_y": 124.764,
-    "right.ankle_y": 124.764,
-    "left.ankle_x": 22.356,
-    "right.ankle_x": 22.356,
-}
-
-
-downward_facing_dog = {
-  "left.hip_y": -2.70121,
-  "left.hip_x": 0.446085,
-  "left.hip_z": -0.142601,
-  "left.knee": 1.11906,
-  "left.ankle_y": -0.0428307,
-  "left.ankle_x": -0.208207,
-  "right.hip_y": -2.70135,
-  "right.hip_x": -0.445718,
-  "right.hip_z": 0.141505,
-  "right.knee": 1.12053,
-  "right.ankle_y": -0.0409522,
-  "right.ankle_x": 0.207152,
-  "spine_x": 0.012726,
-  "spine_z": -0.0124875,
-  "left.shoulder_j1": -1.61139,
-  "left.shoulder_j2": -0.395551,
-  "left.upper_arm_twist": -0.27558,
-  "left.elbow": 0.00866535,
-  "left.wrist_roll": 0.00441669,
-  "left.wrist_pitch": 0.0826308,
-  "left.wrist_yaw": -0.253052,
-  "right.shoulder_j1": 1.64751,
-  "right.shoulder_j2": 0.372409,
-  "right.upper_arm_twist": -0.264508,
-  "right.elbow": -0.0629978,
-  "right.wrist_roll": 0.00408184,
-  "right.wrist_pitch": -0.0856984,
-  "right.wrist_yaw": 0.286192,
-  "neck_no": 0.0,
-  "neck_yes": 0.0,
-}
-
-crawl_pose_elbows_semi_flexed = {
-    # Left side
-    "left.hip_z": -0.15,
-    "left.hip_x": 0.4,
-    "left.hip_y": -2.0,
-    "left.knee": 2.356,
-    "left.ankle_y": -1.053,
-    "left.ankle_x": -0.2,
-    "left.shoulder_j1": -1.63,
-    "left.shoulder_j2": -0.12,
-    "left.upper_arm_twist": -0.185,
-    "left.elbow": -1.1,
-    "left.wrist_roll": 0.0,
-    "left.wrist_pitch": 0.0,
-    "left.wrist_yaw": -0.5,
-
-    # Right side
-    "right.hip_z": 0.15,
-    "right.hip_x": -0.4,
-    "right.hip_y": -2.0,
-    "right.knee": 2.356,
-    "right.ankle_y": -1.053,
-    "right.ankle_x": 0.2,
-    "right.shoulder_j1": 1.63,
-    "right.shoulder_j2": 0.12,
-    "right.upper_arm_twist": -0.185,
-    "right.elbow": 1.1,
-    "right.wrist_roll": 0.0,
-    "right.wrist_pitch": 0.0,
-    "right.wrist_yaw": 0.5,
-
-    # Spine and neck
-    "spine_z": 0.0,
-    "spine_x": 0.0,
-    "neck_no": 0.0,
-    "neck_yes": 0.0,
-}
-
 
 learnable_joints = [
     "left.hip_y",
@@ -329,21 +121,6 @@ learnable_joints = [
     "right.elbow",
     "right.wrist_roll",
     "right.wrist_yaw",
-]
-
-joint_names_fingers = [
-    "left.thumb_rotate",
-    "left.THJ1",
-    "left.FFJ1",
-    "left.MFJ1",
-    "left.RFJ1",
-    "left.LFJ1",
-    "right.thumb_rotate",
-    "right.THJ1",
-    "right.FFJ1",
-    "right.MFJ1",
-    "right.RFJ1",
-    "right.LFJ1",
 ]
 
 def gs_rand_float(lower, upper, shape, device):
@@ -432,7 +209,7 @@ class FigureEnv:
         assert all(name in KD.keys() for name in joint_names)
 
         # build
-        if self.show_viewer and num_envs < 4:
+        if self.show_viewer:
             self.scene.build(n_envs=self.num_envs, env_spacing=(2.0, 2.0))
         else:
             self.scene.build(n_envs=self.num_envs)

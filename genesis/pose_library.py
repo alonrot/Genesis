@@ -306,3 +306,18 @@ downward_facing_dog = {
   "neck_no": -7.58171e-05,
   "neck_yes": 0.000681877,
 }
+
+joint_names_fingers = [
+    "left.thumb_rotate",
+    "left.THJ1",
+    "left.FFJ1",
+    "left.MFJ1",
+    "left.RFJ1",
+    "left.LFJ1",
+    "right.thumb_rotate",
+    "right.THJ1",
+    "right.FFJ1",
+    "right.MFJ1",
+    "right.RFJ1",
+    "right.LFJ1",
+]
