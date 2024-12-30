@@ -332,8 +332,6 @@ class FigureEnv:
 
         self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
         
-
-
         # # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
         # joint_names_with_fingers = list(joint_names) + joint_names_fingers
         # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
@@ -365,6 +363,16 @@ class FigureEnv:
         self.reset_buf = self.episode_length_buf > self.max_episode_length
         self.reset_buf |= torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
         self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
+        self.reset_buf |= torch.any(torch.isnan(self.dof_pos), dim=-1)
+        self.reset_buf |= torch.any(torch.isnan(self.base_ang_vel), dim=-1)
+        self.reset_buf |= torch.any(torch.isnan(self.base_lin_vel), dim=-1)
+        self.reset_buf |= torch.any(torch.isnan(self.projected_gravity), dim=-1)
+
+        # Count the number of environments in which NaNs were detected
+        n_envs_with_nans = torch.sum(self.reset_buf).item()
+
+        # Allow NaNs in one environment at a time and reset it
+        assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
         self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
@@ -378,6 +386,10 @@ class FigureEnv:
             rew = reward_func() * self.reward_scales[name]
             self.rew_buf += rew
             self.episode_sums[name] += rew
+
+        if torch.any(torch.isnan(self.rew_buf)) or torch.any(torch.isinf(self.rew_buf)):
+            print("NaN in self.rew_buf: ", torch.isnan(self.rew_buf).nonzero(as_tuple=False))
+            print("Inf in self.rew_buf: ", torch.isinf(self.rew_buf).nonzero(as_tuple=False))
 
 
         # compute observations
