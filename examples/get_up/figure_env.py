@@ -394,6 +394,16 @@ class FigureEnv:
             axis=-1,
         )
 
+        if torch.any(torch.isnan(self.obs_buf)) or torch.any(torch.isinf(self.obs_buf)):
+            print("self.base_lin_vel: ", self.base_lin_vel)
+            print("self.base_ang_vel: ", self.base_ang_vel)
+            print("self.base_euler: ", self.base_euler)
+            print("self.base_pos: ", self.base_pos)
+            print("self.projected_gravity: ", self.projected_gravity)
+            print("self.dof_pos: ", self.dof_pos)
+            print("self.actions: ", self.actions)
+            print("self.obs_buf: ", self.obs_buf)
+
         # print("self.obs_buf: ", self.obs_buf)
         # print("self.actions: ", self.actions)
 
