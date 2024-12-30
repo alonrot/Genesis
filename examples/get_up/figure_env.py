@@ -66,7 +66,7 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 45,  # degree
+        "termination_if_roll_greater_than": 15,  # degree
         "termination_if_yaw_greater_than": 45,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
