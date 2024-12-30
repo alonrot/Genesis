@@ -98,11 +98,10 @@ def get_cfgs():
             "base_sideways_tilt": 2.0, # gravity-based
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
-            # "final_body_pose_terminal": 10.0,
             "final_body_pose": 50.0,
             "early_termination_base_yaw_tilt": 50.0,
             "early_termination_base_roll_tilt": 50.0,
-            # "final_body_pose_terminal": 100.0,
+            "final_body_pose_terminal": 100.0,
         },
     }
 
@@ -558,39 +557,29 @@ class FigureEnv:
     #     # Terminal cost
     #     return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
-    # def _reward_final_body_pose_terminal(self):
-    #     final_pos_error = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
-        
-    #     self.rew_buf_terminal[:] = 0.0
-    #     self.rew_buf_terminal[self.reset_buf] = -final_pos_error
+    def _reward_final_body_pose_terminal(self):
+        self.rew_buf_terminal[:] = 0.0
+        if torch.any(self.reset_buf):
+            # final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1))
+            final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1))
 
-    #     #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
-    #     return self.rew_buf_terminal
+            # print("final_pos_error: ", final_pos_error)
+            # print("final_pos_error.shape: ", final_pos_error.shape)
+            # import pdb; pdb.set_trace()
 
+            is_near = final_pos_error < self.reward_cfg["terminal_reward_dof_near_threshold"]
+            # print("reset_and_near:self.reset_buf ", reset_and_near)
+            # print("reset_and_near.shape: ", reset_and_near.shape)
 
-    # def _reward_final_body_pose_terminal(self):
-    #     self.rew_buf_terminal[:] = 0.0
-    #     if torch.any(self.reset_buf):
-    #         # final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1))
-    #         final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1))
+            reset_and_near = torch.logical_and(self.reset_buf, is_near)
 
-    #         # print("final_pos_error: ", final_pos_error)
-    #         # print("final_pos_error.shape: ", final_pos_error.shape)
-    #         # import pdb; pdb.set_trace()
+            self.rew_buf_terminal[reset_and_near] = 1.0
 
-    #         is_near = final_pos_error < self.reward_cfg["terminal_reward_dof_near_threshold"]
-    #         # print("reset_and_near:self.reset_buf ", reset_and_near)
-    #         # print("reset_and_near.shape: ", reset_and_near.shape)
+        if torch.any(torch.isnan(self.rew_buf_terminal)):
+            self.rew_buf_terminal[torch.isnan(self.rew_buf_terminal)] = 0.0
 
-    #         reset_and_near = torch.logical_and(self.reset_buf, is_near)
-
-    #         self.rew_buf_terminal[reset_and_near] = 1.0
-
-    #     if torch.any(torch.isnan(self.rew_buf_terminal)):
-    #         self.rew_buf_terminal[torch.isnan(self.rew_buf_terminal)] = 0.0
-
-    #     #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
-    #     return self.rew_buf_terminal
+        #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
+        return self.rew_buf_terminal
 
 
     
