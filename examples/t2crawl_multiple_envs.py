@@ -5,9 +5,9 @@ import genesis as gs
 from time import time
 
 import pdb
-from skeleton_properties import KP, KD, torque_lb, torque_ub
+from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
 
-from pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
+from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
 
 def main():
 
@@ -129,6 +129,8 @@ def run_sim(scene, robot, dofs_idx, joint_names, B, enable_vis):
         joint_positions_desired_batched = torch.tile(
             torch.tensor(joint_positions_desired, device=gs.device), (B, 1)
         )
+
+        # print("joint_positions_desired_batched.shape: ", joint_positions_desired_batched.shape)
 
         robot.control_dofs_position(joint_positions_desired_batched, dofs_idx_local=dofs_idx)
 

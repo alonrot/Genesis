@@ -20,13 +20,13 @@ def get_train_cfg(exp_name, max_iterations):
         "algorithm": {
             "clip_param": 0.2,
             "desired_kl": 0.01,
-            "entropy_coef": 0.01,
+            "entropy_coef": 0.1,
             "gamma": 0.99,
             "lam": 0.95,
-            "learning_rate": 0.0005,
+            "learning_rate": 0.0003,
             "max_grad_norm": 1.0,
             "num_learning_epochs": 5,
-            "num_mini_batches": 4,
+            "num_mini_batches": 16,
             "schedule": "adaptive",
             "use_clipped_value_loss": True,
             "value_loss_coef": 1.0,
@@ -34,8 +34,8 @@ def get_train_cfg(exp_name, max_iterations):
         "init_member_classes": {},
         "policy": {
             "activation": "elu",
-            "actor_hidden_dims": [512, 256, 128],
-            "critic_hidden_dims": [512, 256, 128],
+            "actor_hidden_dims": [512, 512, 256],
+            "critic_hidden_dims": [512, 512, 256],
             "init_noise_std": 1.0,
         },
         "runner": {
@@ -45,7 +45,7 @@ def get_train_cfg(exp_name, max_iterations):
             "load_run": -1,
             "log_interval": 1,
             "max_iterations": max_iterations,
-            "num_steps_per_env": 24,
+            "num_steps_per_env": 256,
             "policy_class_name": "ActorCritic",
             "record_interval": -1,
             "resume": False,
@@ -68,12 +68,10 @@ def get_cfgs():
         "termination_if_roll_greater_than": 10,  # degree
         "termination_if_yaw_greater_than": 10,
         # base pose
-        "base_init_pos": [0.0, 0.0, 0.3],
+        "base_init_pos": [0.0, 0.0, 0.4],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
-        "resampling_time_s": 4.0,
-        "action_scale": 1.0,
-        "simulate_action_latency": True,
+        "action_scale": 0.5,
         "clip_actions": 100.0,
     }
     obs_cfg = {
@@ -84,9 +82,9 @@ def get_cfgs():
             "base_euler": 0.1,
             "base_pos": 0.1,
             "projected_gravity": 1.0,
-            "dof_pos": 1.0,
+            "dof_pos": 1./3.1415,
             "dof_vel": 1.0,
-            "actions": 1.0,
+            "actions": 0.25,
         },
     }
     reward_cfg = {
@@ -94,12 +92,14 @@ def get_cfgs():
         "reward_scales": {
             "zero_lateral_base_vel": 0.01,
             "zero_base_yaw_twist": 0.01,
-            "action_rate": 0.5,
-            "base_pitch_tilt": 1.0,
-            "com_position_rt_base": 1.0,
-            "com_position_rt_base_terminal": 1.0,
+            # "action_rate": 0.5,
+            "base_sideways_tilt": 2.0, # gravity-based
+            # "com_position_rt_base": 1.0,
+            # "com_position_rt_base_terminal": 1.0,
             # "final_body_pose_terminal": 10.0,
             "final_body_pose": 50.0,
+            "early_termination_base_yaw_tilt": 50.0,
+            "early_termination_base_roll_tilt": 50.0,
         },
     }
 
@@ -378,7 +378,7 @@ class FigureEnv:
         self.num_actions = env_cfg["num_actions"]
         # assert self.num_actions == len(KP) == len(KD), "Number of actions must match number of joints (for now)"
 
-        self.simulate_action_latency = True  # there is a 1 step latency on real robot
+        self.simulate_action_latency = False  # there is a 1 step latency on real robot
         self.dt = 0.02  # control frequence on real robot is 50hz
         self.max_episode_length = math.ceil(env_cfg["episode_length_s"] / self.dt)
 
@@ -389,6 +389,8 @@ class FigureEnv:
         self.obs_scales = obs_cfg["obs_scales"]
         self.reward_scales = reward_cfg["reward_scales"]
 
+        self.show_viewer = show_viewer
+
         # create scene
         self.scene = gs.Scene(
             sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
@@ -398,15 +400,16 @@ class FigureEnv:
                 camera_lookat=(0.0, 0.0, 0.5),
                 camera_fov=40,
             ),
-            vis_options=gs.options.VisOptions(n_rendered_envs=1),
+            vis_options=gs.options.VisOptions(n_rendered_envs=1 if not show_viewer else num_envs),
             rigid_options=gs.options.RigidOptions(
                 dt=self.dt,
                 constraint_solver=gs.constraint_solver.Newton,
                 enable_collision=True,
                 enable_joint_limit=True,
+                enable_self_collision=True,
                 gravity=(0.0, 0.0, -9.81),
             ),
-            show_viewer=show_viewer,
+            show_viewer=self.show_viewer,
         )
 
         # add plain
@@ -429,7 +432,10 @@ class FigureEnv:
         assert all(name in KD.keys() for name in joint_names)
 
         # build
-        self.scene.build(n_envs=self.num_envs)
+        if self.show_viewer and num_envs < 4:
+            self.scene.build(n_envs=self.num_envs, env_spacing=(2.0, 2.0))
+        else:
+            self.scene.build(n_envs=self.num_envs)
 
         # names to indices
         self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in joint_names]
@@ -509,6 +515,14 @@ class FigureEnv:
     def step(self, actions):
         self.actions = torch.clip(actions, -self.env_cfg["clip_actions"], self.env_cfg["clip_actions"])
         exec_actions = self.last_actions if self.simulate_action_latency else self.actions
+
+        # Print max, min, mean and std of actions
+        # print("actions: ", actions)
+        # print("max: ", torch.max(actions))
+        # print("min: ", torch.min(actions))
+        # print("mean: ", torch.mean(actions))
+        # print("std: ", torch.std(actions))
+
         
         # Learn deviations from the initial body pose
         # target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.default_dof_pos
@@ -528,11 +542,17 @@ class FigureEnv:
         # print("self.motor_dofs: ", self.motor_dofs)
         for idx in self.idx_controlled_joints:
             idx_local = self.motor_dofs.index(idx)
-            target_joints_pos_to_send[0,idx_local] = target_controlled_joints_pos_current_plus_actions[0,self.idx_controlled_joints.index(idx)]
+            target_joints_pos_to_send[:,idx_local] = target_controlled_joints_pos_current_plus_actions[:,self.idx_controlled_joints.index(idx)]
 
+
+        # print("target_joints_pos_to_send: ", target_joints_pos_to_send)
+        # print("target_joints_pos_to_send.shape: ", target_joints_pos_to_send.shape)
 
         self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
         
+
+
+
 
         # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
         # joint_names_with_fingers = list(joint_names) + joint_names_fingers
@@ -556,13 +576,6 @@ class FigureEnv:
         self.projected_gravity = transform_by_quat(self.global_gravity, inv_base_quat)
         self.dof_pos[:] = self.robot.get_dofs_position(self.motor_dofs)
         self.dof_vel[:] = self.robot.get_dofs_velocity(self.motor_dofs)
-
-        # resample commands
-        envs_idx = (
-            (self.episode_length_buf % int(self.env_cfg["resampling_time_s"] / self.dt) == 0)
-            .nonzero(as_tuple=False)
-            .flatten()
-        )
 
         # check termination and reset
         self.reset_buf = self.episode_length_buf > self.max_episode_length
@@ -597,6 +610,9 @@ class FigureEnv:
             axis=-1,
         )
 
+        # print("self.obs_buf: ", self.obs_buf)
+        # print("self.actions: ", self.actions)
+
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
 
@@ -604,6 +620,7 @@ class FigureEnv:
         self.extras["base_ang_vel"] = self.base_ang_vel
         self.extras["base_lin_vel"] = self.base_lin_vel
         self.extras["base_euler"] = self.base_euler
+        self.extras["base_pos"] = self.base_pos
         self.extras["projected_gravity"] = self.projected_gravity
         self.extras["dof_pos"] = self.dof_pos
         self.extras["dof_vel"] = self.dof_vel
@@ -617,8 +634,8 @@ class FigureEnv:
         #     add2tensorboard(self.writer, self.extras, self.global_counter)
         #     self.global_counter += 1
 
-        if torch.any(self.reset_buf):
-            print("self.episode_length_buf: ", self.episode_length_buf)
+        # if torch.any(self.reset_buf):
+        #     print("self.episode_length_buf: ", self.episode_length_buf)
 
         return self.obs_buf, None, self.rew_buf, self.reset_buf, self.extras
 
@@ -684,10 +701,10 @@ class FigureEnv:
         ang_vel_error = torch.sum(torch.square(self.base_ang_vel[:, 2:3]), dim=1)
         return torch.exp(-ang_vel_error / self.reward_cfg["tracking_sigma"])
 
-    def _reward_action_rate(self):
-        # Penalize changes in actions
-        # import pdb; pdb.set_trace()
-        return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
+    # def _reward_action_rate(self):
+    #     # Penalize changes in actions
+    #     # import pdb; pdb.set_trace()
+    #     return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
     # def _reward_base_pitch_yaw_tilt(self):
     #     # Penalize base tilting: Assuming that the torso will be mostly rotated,
@@ -695,19 +712,19 @@ class FigureEnv:
     #     base_pitch_tilt_error = torch.sum(torch.square(self.projected_gravity[:,1::]), dim=1)
     #     return torch.exp(-base_pitch_tilt_error / self.reward_cfg["tracking_sigma"])
 
-    def _reward_base_pitch_tilt(self):
-        # Penalize base tilting: Assuming that the torso will be mostly rotated,
-        # we penalize pitch and yaw tilting in Base frame coordinates.
-        base_pitch_tilt_error = torch.sum(torch.square(self.projected_gravity[:,1:2]), dim=1)
-        return torch.exp(-base_pitch_tilt_error / self.reward_cfg["tracking_sigma"])
+    def _reward_base_sideways_tilt(self):
+        # Penalize base sideways tilt by projecting the gravity vector on the base frame and 
+        # extacting the y component (sideways tilt)
+        base_sideways_tilt = torch.sum(torch.square(self.projected_gravity[:,1:2]), dim=1)
+        return torch.exp(-base_sideways_tilt / self.reward_cfg["tracking_sigma"])
+    
+    # def _reward_com_position_rt_base(self):
+    #     # Penalize COM position such that it gets closer and closer to be between the feet
+    #     return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
-    def _reward_com_position_rt_base(self):
-        # Penalize COM position such that it gets closer and closer to be between the feet
-        return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
-
-    def _reward_com_position_rt_base_terminal(self):
-        # Terminal cost
-        return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
+    # def _reward_com_position_rt_base_terminal(self):
+    #     # Terminal cost
+    #     return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
     # def _reward_final_body_pose_terminal(self):
     #     final_pos_error = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
@@ -723,3 +740,11 @@ class FigureEnv:
         
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
         return -final_pos_error
+    
+    def _reward_early_termination_base_yaw_tilt(self):
+        base_yaw_tilted = torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
+        return -base_yaw_tilted.float()
+    
+    def _reward_early_termination_base_roll_tilt(self):
+        base_roll_tilted = torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
+        return -base_roll_tilted.float()

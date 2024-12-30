@@ -37,7 +37,7 @@ def main():
     writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
     env = FigureEnv(
-        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, writer=writer
+        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, writer=writer, show_viewer=args.vis,
     )
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device=device)
@@ -47,15 +47,16 @@ def main():
         open(f"{log_dir}/cfgs.pkl", "wb"),
     )
 
-    runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=True)
+    init_at_random_ep_len = False
 
-#     gs.tools.run_in_another_thread(fn=run, args=(runner, args.max_iterations))
-   
-#     if args.vis:
-#         env.scene.viewer.start()
+    if args.vis:
+        gs.tools.run_in_another_thread(fn=run, args=(runner, args.max_iterations, init_at_random_ep_len))
+        env.scene.viewer.start()
+    else:
+        runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=init_at_random_ep_len)
 
-# def run(runner, max_iterations):
-#     runner.learn(num_learning_iterations=max_iterations, init_at_random_ep_len=True)
+def run(runner, max_iterations, init_at_random_ep_len):
+    runner.learn(num_learning_iterations=max_iterations, init_at_random_ep_len=init_at_random_ep_len)
 
 if __name__ == "__main__":
     main()
