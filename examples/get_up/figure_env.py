@@ -71,7 +71,7 @@ def get_cfgs():
         "base_init_pos": [0.0, 0.0, 0.4],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
-        "action_scale": 0.5,
+        "action_scale": 0.2,
         "clip_actions": 100.0,
     }
     obs_cfg = {

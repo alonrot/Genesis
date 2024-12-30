@@ -46,7 +46,7 @@ def run_sim_random_actions(env, writer):
     with torch.no_grad():
         while True:
             actions_rand = torch.rand((env.num_envs, env.num_actions), device=env.device, dtype=gs.tc_float) * 2 - 1
-            actions_rand = torch.zeros_like(actions_rand)
+            # actions_rand = torch.zeros_like(actions_rand)
             obs, _, rews, dones, infos = env.step(actions_rand)
 
             iter += 1
