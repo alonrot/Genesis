@@ -403,7 +403,6 @@ class FigureEnv:
             print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
             print("self.reset_buf: ", self.reset_buf)
             
-
             # Identify which item contains the NaN and Inf values
             if torch.any(torch.isnan(self.base_lin_vel)) or torch.any(torch.isinf(self.base_lin_vel)):
                 print("NaN in self.base_lin_vel: ", torch.isnan(self.base_lin_vel).nonzero(as_tuple=False))
@@ -430,9 +429,16 @@ class FigureEnv:
                 print("NaN in self.obs_buf: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
                 print("Inf in self.obs_buf: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
 
+            # Print all the actions:
+            for idx, action in enumerate(self.actions):
+                print("Action ", idx, ": ", action)
+                print("NaN in action ", idx, ": ", torch.isnan(action).nonzero(as_tuple=False))
+                print("Inf in action ", idx, ": ", torch.isinf(action).nonzero(as_tuple=False))
+
             for name, reward_func in self.reward_functions.items():
                 rew = reward_func() * self.reward_scales[name]
                 print("Reward for ", name, ": ", rew)
+                print("NaN in ", name, ": ", torch.isnan(rew).nonzero(as_tuple=False))
 
             assert n_envs_with_nans < int(self.num_envs*0.01), f"NaNs detected in {n_envs_with_nans} of environments ( > 1%)"
 
