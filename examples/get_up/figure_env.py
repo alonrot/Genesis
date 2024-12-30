@@ -538,6 +538,9 @@ class FigureEnv:
 
             self.rew_buf_terminal[reset_and_near] = 1.0
 
+        if torch.any(torch.isnan(self.rew_buf_terminal)):
+            self.rew_buf_terminal[torch.isnan(self.rew_buf_terminal)] = 0.0
+
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
         return self.rew_buf_terminal
 
