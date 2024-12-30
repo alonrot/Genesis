@@ -53,7 +53,7 @@ def main():
         gs.tools.run_in_another_thread(fn=run, args=(runner, args.max_iterations, init_at_random_ep_len))
         env.scene.viewer.start()
     else:
-        runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=init_at_random_ep_len)
+        runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=True)
 
 def run(runner, max_iterations, init_at_random_ep_len):
     runner.learn(num_learning_iterations=max_iterations, init_at_random_ep_len=init_at_random_ep_len)

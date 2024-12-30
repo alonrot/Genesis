@@ -105,7 +105,7 @@ def get_cfgs():
         },
     }
 
-    return env_cfg, obs_cfg, reward_cfgq
+    return env_cfg, obs_cfg, reward_cfg
 
 
 learnable_joints = [
