@@ -66,8 +66,8 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 10,  # degree
-        "termination_if_yaw_greater_than": 10,
+        "termination_if_roll_greater_than": 45,  # degree
+        "termination_if_yaw_greater_than": 45,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
@@ -387,11 +387,14 @@ class FigureEnv:
         self.reset_buf = self.episode_length_buf > self.max_episode_length
         self.reset_buf |= torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
         self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
-        self.reset_buf |= torch.any(torch.isnan(self.obs_buf), dim=-1)
-        self.reset_buf |= torch.any(torch.isnan(self.rew_buf), dim=-1)
+        are_envs_with_nans = torch.any(torch.isnan(self.obs_buf), dim=-1) | torch.any(torch.isnan(self.rew_buf), dim=-1)
+        self.reset_buf |= are_envs_with_nans
+
+        print("episode_length_buf: ", self.episode_length_buf)
+        print("self.max_episode_length: ", self.max_episode_length)
 
         # Count the number of environments in which NaNs were detected
-        n_envs_with_nans = torch.sum(self.reset_buf).item()
+        n_envs_with_nans = torch.sum(are_envs_with_nans).item()
 
         # Allow NaNs in one environment at a time and reset it
         # assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
