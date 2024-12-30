@@ -89,6 +89,7 @@ def get_cfgs():
     }
     reward_cfg = {
         "tracking_sigma": 0.2,
+        "terminal_reward_dof_near_threshold": 0.15,
         "reward_scales": {
             "zero_lateral_base_vel": 0.01,
             "zero_base_yaw_twist": 0.01,
@@ -100,6 +101,7 @@ def get_cfgs():
             "final_body_pose": 50.0,
             "early_termination_base_yaw_tilt": 50.0,
             "early_termination_base_roll_tilt": 50.0,
+            "final_body_pose_terminal": 100.0,
         },
     }
 
@@ -111,15 +113,17 @@ learnable_joints = [
     "left.knee",
     "left.ankle_y",
     "left.shoulder_j1",
+    "left.shoulder_j2",
     "left.elbow",
-    "left.wrist_roll",
+    # "left.wrist_roll",
     "left.wrist_yaw",
     "right.hip_y",
     "right.knee",
     "right.ankle_y",
     "right.shoulder_j1",
+    "right.shoulder_j2",
     "right.elbow",
-    "right.wrist_roll",
+    # "right.wrist_roll",
     "right.wrist_yaw",
 ]
 
@@ -198,7 +202,8 @@ class FigureEnv:
         self.inv_base_init_quat = inv_quat(self.base_init_quat)
         self.robot = self.scene.add_entity(
             gs.morphs.MJCF(file=MJCF_PATH,
-            pos   = (0, 0, 0.3),
+            # pos   = (0, 0, 0.3),
+            pos   = (0, 0, 0.2),
             euler = (0, 90, 0), # we follow scipy's extrinsic x-y-z rotation convention, in degrees,
             # quat  = (1.0, 0.0, 0.0, 0.0), # we use w-x-y-z convention for quaternions,
             scale = 1.0),
@@ -274,12 +279,12 @@ class FigureEnv:
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
         self.base_quat = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
         self.default_dof_pos = torch.tensor(
-            [crawl_pose_elbows_semi_flexed[name] for name in joint_names],
+            [t_pose_ground[name] for name in joint_names],
             device=self.device,
             dtype=gs.tc_float,
         )
         self.terminal_dof_pos = torch.tensor(
-            [crawl_pose_elbows_semi_flexed[name] for name in joint_names],
+            [push_up_halfway[name] for name in joint_names],
             device=self.device,
             dtype=gs.tc_float,
         )
@@ -511,6 +516,27 @@ class FigureEnv:
 
     #     #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
     #     return self.rew_buf_terminal
+
+
+    def _reward_final_body_pose_terminal(self):
+        self.rew_buf_terminal[:] = 0.0
+        if torch.any(self.reset_buf):
+            final_pos_error = torch.sqrt(torch.mean(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1))
+
+            # print("final_pos_error: ", final_pos_error)
+            # print("final_pos_error.shape: ", final_pos_error.shape)
+            # import pdb; pdb.set_trace()
+
+            reset_and_near = self.reset_buf & (final_pos_error < self.reward_cfg["terminal_reward_dof_near_threshold"])
+            # print("reset_and_near: ", reset_and_near)
+            # print("reset_and_near.shape: ", reset_and_near.shape)
+
+            self.rew_buf_terminal[reset_and_near] = 1.0
+
+        #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
+        return self.rew_buf_terminal
+
+
     
     def _reward_final_body_pose(self):
         final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
