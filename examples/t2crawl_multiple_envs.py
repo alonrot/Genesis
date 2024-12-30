@@ -57,7 +57,7 @@ def main():
 
     # create 4 parallel environments
     B = 4
-    scene.build(n_envs=B, env_spacing=(2.0, 2.0))
+    scene.build(n_envs=B, env_spacing=(2.5, 2.5))
 
     ############ Optional: set control gains ############
     # set positional gains
