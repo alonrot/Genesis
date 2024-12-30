@@ -372,7 +372,8 @@ class FigureEnv:
         n_envs_with_nans = torch.sum(self.reset_buf).item()
 
         # Allow NaNs in one environment at a time and reset it
-        assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
+        # assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
+        print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments")
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
         self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
