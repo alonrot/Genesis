@@ -368,7 +368,7 @@ class FigureEnv:
             self.rew_buf += rew
             self.episode_sums[name] += rew
 
-        assert not torch.any(torch.isnan(self.rew_buf)) and not torch.any(torch.isinf(self.rew_buf)):
+        assert not torch.any(torch.isnan(self.rew_buf)) and not torch.any(torch.isinf(self.rew_buf)), "self.rew_buf contains NaNs or Infs"
 
         # compute observations
         self.obs_buf = torch.cat(
