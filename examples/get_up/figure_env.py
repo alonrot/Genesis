@@ -21,7 +21,7 @@ def get_train_cfg(exp_name, max_iterations):
         "algorithm": {
             "clip_param": 0.2,
             "desired_kl": 0.01,
-            "entropy_coef": 0.01,
+            "entropy_coef": 0.02,
             "gamma": 0.99,
             "lam": 0.95,
             "learning_rate": 0.0003,
@@ -94,7 +94,7 @@ def get_cfgs():
         "reward_scales": {
             "zero_lateral_base_vel": 0.01,
             "zero_base_yaw_twist": 0.01,
-            # "action_rate": 0.5,
+            "action_rate": 0.5,
             "base_sideways_tilt": 2.0, # gravity-based
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
@@ -105,7 +105,7 @@ def get_cfgs():
         },
     }
 
-    return env_cfg, obs_cfg, reward_cfg
+    return env_cfg, obs_cfg, reward_cfgq
 
 
 learnable_joints = [
@@ -191,6 +191,7 @@ class FigureEnv:
                 gravity=(0.0, 0.0, -9.81),
             ),
             show_viewer=self.show_viewer,
+            show_FPS=False,
         )
 
         # add plain
@@ -390,8 +391,8 @@ class FigureEnv:
         are_envs_with_nans = torch.any(torch.isnan(self.obs_buf), dim=-1) | torch.any(torch.isnan(self.rew_buf), dim=-1)
         self.reset_buf |= are_envs_with_nans
 
-        print("episode_length_buf: ", self.episode_length_buf)
-        print("self.max_episode_length: ", self.max_episode_length)
+        # print("episode_length_buf: ", self.episode_length_buf)
+        # print("self.max_episode_length: ", self.max_episode_length)
 
         # Count the number of environments in which NaNs were detected
         n_envs_with_nans = torch.sum(are_envs_with_nans).item()
@@ -401,7 +402,7 @@ class FigureEnv:
         if n_envs_with_nans > 0:
             print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
             print("self.reset_buf: ", self.reset_buf)
-            # assert torch.all(self.reset_buf == True), "self.reset_buf are all True"
+            assert n_envs_with_nans < int(self.num_envs*0.01), f"NaNs detected in {n_envs_with_nans} of environments ( > 1%)"
             self.obs_buf[are_envs_with_nans] = 0.0
             self.rew_buf[are_envs_with_nans] = 0.0
 
@@ -541,10 +542,10 @@ class FigureEnv:
         ang_vel_error = torch.sum(torch.square(self.base_ang_vel[:, 2:3]), dim=1)
         return torch.exp(-ang_vel_error / self.reward_cfg["tracking_sigma"])
 
-    # def _reward_action_rate(self):
-    #     # Penalize changes in actions
-    #     # import pdb; pdb.set_trace()
-    #     return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
+    def _reward_action_rate(self):
+        # Penalize changes in actions
+        # import pdb; pdb.set_trace()
+        return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
     # def _reward_base_pitch_yaw_tilt(self):
     #     # Penalize base tilting: Assuming that the torso will be mostly rotated,
