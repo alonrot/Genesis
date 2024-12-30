@@ -400,6 +400,10 @@ class FigureEnv:
         # assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
         if n_envs_with_nans > 0:
             print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
+            print("self.reset_buf: ", self.reset_buf)
+            # assert torch.all(self.reset_buf == True), "self.reset_buf are all True"
+            self.obs_buf[are_envs_with_nans] = 0.0
+            self.rew_buf[are_envs_with_nans] = 0.0
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
         self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
