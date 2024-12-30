@@ -13,6 +13,7 @@ else:
 from genesis.skeleton_properties import KP,  KD, torque_lb, torque_ub
 
 from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, joint_names_fingers
+joint_names = KP.keys()
 
 def get_train_cfg(exp_name, max_iterations):
 
@@ -71,7 +72,7 @@ def get_cfgs():
         "base_init_pos": [0.0, 0.0, 0.4],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
-        "action_scale": 0.2,
+        "action_scale": 0.45,
         "clip_actions": 100.0,
     }
     obs_cfg = {
@@ -210,7 +211,6 @@ class FigureEnv:
         )
 
         assert len(KP) == len(KD)
-        joint_names = KP.keys()
         assert all(name in KD.keys() for name in joint_names)
 
         # build
@@ -334,13 +334,15 @@ class FigureEnv:
         
 
 
-
-
-        # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
+        # # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
         # joint_names_with_fingers = list(joint_names) + joint_names_fingers
         # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
-        # target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send, torch.tensor([[1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025]])), axis=1)
+        # target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send, torch.tensor([[1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57]])), axis=1)
         # self.robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, self.motor_dofs_with_fingers)
+
+        # # print joint names
+        # for joint in self.robot.joints:
+        #     print("joint.name: ", joint.name)
 
         # self.robot.control_dofs_position(target_dof_pos, self.motor_dofs)
         self.scene.step()
