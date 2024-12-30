@@ -402,7 +402,7 @@ class FigureEnv:
         if n_envs_with_nans > 0:
             print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
             print("self.reset_buf: ", self.reset_buf)
-            assert n_envs_with_nans < int(self.num_envs*0.01), f"NaNs detected in {n_envs_with_nans} of environments ( > 1%)"
+            
 
             # Identify which item contains the NaN and Inf values
             if torch.any(torch.isnan(self.base_lin_vel)) or torch.any(torch.isinf(self.base_lin_vel)):
@@ -433,6 +433,8 @@ class FigureEnv:
             for name, reward_func in self.reward_functions.items():
                 rew = reward_func() * self.reward_scales[name]
                 print("Reward for ", name, ": ", rew)
+
+            assert n_envs_with_nans < int(self.num_envs*0.01), f"NaNs detected in {n_envs_with_nans} of environments ( > 1%)"
 
 
         time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
