@@ -395,6 +395,34 @@ class FigureEnv:
         )
 
         if torch.any(torch.isnan(self.obs_buf)) or torch.any(torch.isinf(self.obs_buf)):
+
+            # Identify which item contains the NaN and Inf values
+            if torch.any(torch.isnan(self.base_lin_vel)) or torch.any(torch.isinf(self.base_lin_vel)):
+                print("NaN in self.base_lin_vel: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.base_lin_vel: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.base_ang_vel)) or torch.any(torch.isinf(self.base_ang_vel)):
+                print("NaN in self.base_ang_vel: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.base_ang_vel: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.base_euler)) or torch.any(torch.isinf(self.base_euler)):
+                print("NaN in self.base_euler: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.base_euler: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.base_pos)) or torch.any(torch.isinf(self.base_pos)):
+                print("NaN in self.base_pos: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.base_pos: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.projected_gravity)) or torch.any(torch.isinf(self.projected_gravity)):
+                print("NaN in self.projected_gravity: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.projected_gravity: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.dof_pos)) or torch.any(torch.isinf(self.dof_pos)):
+                print("NaN in self.dof_pos: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.dof_pos: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.actions)) or torch.any(torch.isinf(self.actions)):
+                print("NaN in self.actions: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.actions: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.obs_buf)) or torch.any(torch.isinf(self.obs_buf)):
+                print("NaN in self.obs_buf: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.obs_buf: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+
+            
             print("self.base_lin_vel: ", self.base_lin_vel)
             print("self.base_ang_vel: ", self.base_ang_vel)
             print("self.base_euler: ", self.base_euler)
