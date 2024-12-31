@@ -46,7 +46,7 @@ def get_train_cfg(exp_name, max_iterations):
             "load_run": -1,
             "log_interval": 1,
             "max_iterations": max_iterations,
-            "num_steps_per_env": 256,
+            "num_steps_per_env": 24,
             "policy_class_name": "ActorCritic",
             "record_interval": -1,
             "resume": False,
@@ -73,7 +73,7 @@ def get_cfgs():
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
         "action_scale": 0.45,
-        "clip_actions": 100.0,
+        "clip_actions": 1.0,
     }
     obs_cfg = {
         "num_obs": 59,
