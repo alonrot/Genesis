@@ -21,7 +21,7 @@ def get_train_cfg(exp_name, max_iterations):
         "algorithm": {
             "clip_param": 0.2,
             "desired_kl": 0.01,
-            "entropy_coef": 0.01,
+            "entropy_coef": 0.05,
             "gamma": 0.99,
             "lam": 0.95,
             "learning_rate": 0.0003,
@@ -53,7 +53,7 @@ def get_train_cfg(exp_name, max_iterations):
             "resume_path": None,
             "run_name": "",
             "runner_class_name": "runner_class_name",
-            "save_interval": 50,
+            "save_interval": 25,
         },
         "runner_class_name": "OnPolicyRunner",
         "seed": 1,
