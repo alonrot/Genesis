@@ -35,8 +35,8 @@ def get_train_cfg(exp_name, max_iterations):
         "init_member_classes": {},
         "policy": {
             "activation": "elu",
-            "actor_hidden_dims": [512, 512, 256],
-            "critic_hidden_dims": [512, 512, 256],
+            "actor_hidden_dims": [512, 256, 128],
+            "critic_hidden_dims": [512, 256, 128],
             "init_noise_std": 1.0,
         },
         "runner": {
@@ -66,7 +66,7 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 45,  # degree
+        "termination_if_roll_greater_than": 30,  # degree
         "termination_if_yaw_greater_than": 45,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
@@ -104,7 +104,7 @@ def get_cfgs():
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
             # "final_body_pose": 50.0,
-            "final_body_pose": 10.0,
+            "final_body_pose": 20.0,
             "early_termination_base_yaw_tilt": 50.0,
             "early_termination_base_roll_tilt": 50.0,
             # "final_body_pose_terminal": 100.0,
