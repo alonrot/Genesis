@@ -21,7 +21,7 @@ def get_train_cfg(exp_name, max_iterations):
         "algorithm": {
             "clip_param": 0.2,
             "desired_kl": 0.01,
-            "entropy_coef": 0.01,
+            "entropy_coef": 0.02,
             "gamma": 0.99,
             "lam": 0.95,
             "learning_rate": 0.0003,
@@ -66,7 +66,7 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 30,  # degree
+        "termination_if_roll_greater_than": 90,  # degree
         "termination_if_yaw_greater_than": 90,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
@@ -104,9 +104,9 @@ def get_cfgs():
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
             # "final_body_pose": 50.0,
-            "final_body_pose": 20.0,
-            "early_termination_base_yaw_tilt": 50.0,
-            "early_termination_base_roll_tilt": 50.0,
+            "final_body_pose": 100.0,
+            "early_termination_base_yaw_tilt": 5.0,
+            "early_termination_base_roll_tilt": 5.0,
             # "final_body_pose_terminal": 100.0,
         },
     }
@@ -615,6 +615,13 @@ class FigureEnv:
     
     def _reward_final_body_pose(self):
         final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
+
+        print("final_pos_error: ", final_pos_error)
+        print("final_pos_error.shape: ", final_pos_error.shape)
+        print("final_pos_error max: ", torch.max(final_pos_error))
+        print("final_pos_error min: ", torch.min(final_pos_error))
+        print("final_pos_error mean: ", torch.mean(final_pos_error))
+        print("final_pos_error std: ", torch.std(final_pos_error))
         
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
         return -final_pos_error
