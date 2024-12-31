@@ -66,13 +66,13 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 30,  # degree
+        "termination_if_roll_greater_than": 20,  # degree
         "termination_if_yaw_greater_than": 45,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
-        "action_scale": 0.45,
+        "action_scale": 0.1,
         "clip_actions": 1.0,
     }
     obs_cfg = {
