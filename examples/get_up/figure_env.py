@@ -66,14 +66,14 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 10,  # degree
-        "termination_if_yaw_greater_than": 10,
+        "termination_if_roll_greater_than": 15,  # degree
+        "termination_if_yaw_greater_than": 45,
         # base pose
-        "base_init_pos": [0.0, 0.0, 0.4],
+        "base_init_pos": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
         "action_scale": 0.45,
-        "clip_actions": 100.0,
+        "clip_actions": 1.0,
     }
     obs_cfg = {
         "num_obs": 59,
@@ -94,11 +94,10 @@ def get_cfgs():
         "reward_scales": {
             "zero_lateral_base_vel": 0.01,
             "zero_base_yaw_twist": 0.01,
-            # "action_rate": 0.5,
+            "action_rate": 0.5,
             "base_sideways_tilt": 2.0, # gravity-based
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
-            # "final_body_pose_terminal": 10.0,
             "final_body_pose": 50.0,
             "early_termination_base_yaw_tilt": 50.0,
             "early_termination_base_roll_tilt": 50.0,
@@ -192,6 +191,7 @@ class FigureEnv:
                 gravity=(0.0, 0.0, -9.81),
             ),
             show_viewer=self.show_viewer,
+            show_FPS=False,
         )
 
         # add plain
@@ -204,7 +204,7 @@ class FigureEnv:
         self.robot = self.scene.add_entity(
             gs.morphs.MJCF(file=MJCF_PATH,
             # pos   = (0, 0, 0.3),
-            pos   = (0, 0, 0.2),
+            pos   = tuple(self.env_cfg["base_init_pos"]),
             euler = (0, 90, 0), # we follow scipy's extrinsic x-y-z rotation convention, in degrees,
             # quat  = (1.0, 0.0, 0.0, 0.0), # we use w-x-y-z convention for quaternions,
             scale = 1.0),
@@ -330,10 +330,10 @@ class FigureEnv:
         # print("target_joints_pos_to_send: ", target_joints_pos_to_send)
         # print("target_joints_pos_to_send.shape: ", target_joints_pos_to_send.shape)
 
+        assert not torch.any(torch.isnan(target_joints_pos_to_send)) and not torch.any(torch.isinf(target_joints_pos_to_send)), "target_joints_pos_to_send contains NaNs or Infs"
+
         self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
         
-
-
         # # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
         # joint_names_with_fingers = list(joint_names) + joint_names_fingers
         # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
@@ -361,17 +361,6 @@ class FigureEnv:
         self.dof_pos[:] = self.robot.get_dofs_position(self.motor_dofs)
         self.dof_vel[:] = self.robot.get_dofs_velocity(self.motor_dofs)
 
-        # check termination and reset
-        self.reset_buf = self.episode_length_buf > self.max_episode_length
-        self.reset_buf |= torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
-        self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
-
-        time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
-        self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
-        self.extras["time_outs"][time_out_idx] = 1.0
-
-        self.reset_idx(self.reset_buf.nonzero(as_tuple=False).flatten())
-
         # compute reward
         self.rew_buf[:] = 0.0
         for name, reward_func in self.reward_functions.items():
@@ -379,6 +368,7 @@ class FigureEnv:
             self.rew_buf += rew
             self.episode_sums[name] += rew
 
+        # assert not torch.any(torch.isnan(self.rew_buf)) and not torch.any(torch.isinf(self.rew_buf)), "self.rew_buf contains NaNs or Infs"
 
         # compute observations
         self.obs_buf = torch.cat(
@@ -393,6 +383,74 @@ class FigureEnv:
             ],
             axis=-1,
         )
+
+        # check termination and reset
+        self.reset_buf = self.episode_length_buf > self.max_episode_length
+        self.reset_buf |= torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
+        self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
+        are_envs_with_nans = torch.any(torch.isnan(self.obs_buf), dim=-1) | torch.any(torch.isnan(self.rew_buf), dim=-1)
+        self.reset_buf |= are_envs_with_nans
+
+        # print("episode_length_buf: ", self.episode_length_buf)
+        # print("self.max_episode_length: ", self.max_episode_length)
+
+        # Count the number of environments in which NaNs were detected
+        n_envs_with_nans = torch.sum(are_envs_with_nans).item()
+
+        # Allow NaNs in one environment at a time and reset it
+        # assert n_envs_with_nans < 1, f"NaNs detected in {n_envs_with_nans} > 1 environments"
+        if n_envs_with_nans > 0:
+            print("[WARNING]: NaNs detected in ", n_envs_with_nans, " environments. Resetting them.")
+            print("self.reset_buf: ", self.reset_buf)
+            
+            # Identify which item contains the NaN and Inf values
+            if torch.any(torch.isnan(self.base_lin_vel)) or torch.any(torch.isinf(self.base_lin_vel)):
+                print("NaN in self.base_lin_vel: ", torch.isnan(self.base_lin_vel).nonzero(as_tuple=False))
+                print("Inf in self.base_lin_vel: ", torch.isinf(self.base_lin_vel).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.base_ang_vel)) or torch.any(torch.isinf(self.base_ang_vel)):
+                print("NaN in self.base_ang_vel: ", torch.isnan(self.base_ang_vel).nonzero(as_tuple=False))
+                print("Inf in self.base_ang_vel: ", torch.isinf(self.base_ang_vel).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.base_euler)) or torch.any(torch.isinf(self.base_euler)):
+                print("NaN in self.base_euler: ", torch.isnan(self.base_euler).nonzero(as_tuple=False))
+                print("Inf in self.base_euler: ", torch.isinf(self.base_euler).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.base_pos)) or torch.any(torch.isinf(self.base_pos)):
+                print("NaN in self.base_pos: ", torch.isnan(self.base_pos).nonzero(as_tuple=False))
+                print("Inf in self.base_pos: ", torch.isinf(self.base_pos).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.projected_gravity)) or torch.any(torch.isinf(self.projected_gravity)):
+                print("NaN in self.projected_gravity: ", torch.isnan(self.projected_gravity).nonzero(as_tuple=False))
+                print("Inf in self.projected_gravity: ", torch.isinf(self.projected_gravity).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.dof_pos)) or torch.any(torch.isinf(self.dof_pos)):
+                print("NaN in self.dof_pos: ", torch.isnan(self.dof_pos).nonzero(as_tuple=False))
+                print("Inf in self.dof_pos: ", torch.isinf(self.dof_pos).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.actions)) or torch.any(torch.isinf(self.actions)):
+                print("NaN in self.actions: ", torch.isnan(self.actions).nonzero(as_tuple=False))
+                print("Inf in self.actions: ", torch.isinf(self.actions).nonzero(as_tuple=False))
+            if torch.any(torch.isnan(self.obs_buf)) or torch.any(torch.isinf(self.obs_buf)):
+                print("NaN in self.obs_buf: ", torch.isnan(self.obs_buf).nonzero(as_tuple=False))
+                print("Inf in self.obs_buf: ", torch.isinf(self.obs_buf).nonzero(as_tuple=False))
+
+            # Print min max of actions
+            print("actions: ", self.actions)
+            print("max: ", torch.max(self.actions))
+            print("min: ", torch.min(self.actions))
+
+
+            for name, reward_func in self.reward_functions.items():
+                rew = reward_func() * self.reward_scales[name]
+                print("Reward for ", name, ": ", rew)
+                print("NaN in ", name, ": ", torch.isnan(rew).nonzero(as_tuple=False))
+
+            assert n_envs_with_nans < int(self.num_envs*0.01), f"NaNs detected in {n_envs_with_nans} of environments ( > 1%)"
+
+
+        time_out_idx = (self.episode_length_buf > self.max_episode_length).nonzero(as_tuple=False).flatten()
+        self.extras["time_outs"] = torch.zeros_like(self.reset_buf, device=self.device, dtype=gs.tc_float)
+        self.extras["time_outs"][time_out_idx] = 1.0
+
+        self.reset_idx(self.reset_buf.nonzero(as_tuple=False).flatten())
+
+        if torch.any(torch.isnan(self.obs_buf)) or torch.any(torch.isinf(self.obs_buf)):
+            print("[WARNING]: NaNs or Infs detected in self.obs_buf, even though we reset the environments with NaNs.")
 
         # print("self.obs_buf: ", self.obs_buf)
         # print("self.actions: ", self.actions)
@@ -485,10 +543,10 @@ class FigureEnv:
         ang_vel_error = torch.sum(torch.square(self.base_ang_vel[:, 2:3]), dim=1)
         return torch.exp(-ang_vel_error / self.reward_cfg["tracking_sigma"])
 
-    # def _reward_action_rate(self):
-    #     # Penalize changes in actions
-    #     # import pdb; pdb.set_trace()
-    #     return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
+    def _reward_action_rate(self):
+        # Penalize changes in actions
+        # import pdb; pdb.set_trace()
+        return -torch.sum(torch.square(self.last_actions - self.actions), dim=1)
     
     # def _reward_base_pitch_yaw_tilt(self):
     #     # Penalize base tilting: Assuming that the torso will be mostly rotated,
@@ -510,16 +568,6 @@ class FigureEnv:
     #     # Terminal cost
     #     return torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
-    # def _reward_final_body_pose_terminal(self):
-    #     final_pos_error = torch.sum(torch.square(self.dof_pos[self.reset_buf] - self.terminal_dof_pos), dim=1)
-        
-    #     self.rew_buf_terminal[:] = 0.0
-    #     self.rew_buf_terminal[self.reset_buf] = -final_pos_error
-
-    #     #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
-    #     return self.rew_buf_terminal
-
-
     def _reward_final_body_pose_terminal(self):
         self.rew_buf_terminal[:] = 0.0
         if torch.any(self.reset_buf):
@@ -537,6 +585,9 @@ class FigureEnv:
             reset_and_near = torch.logical_and(self.reset_buf, is_near)
 
             self.rew_buf_terminal[reset_and_near] = 1.0
+
+        if torch.any(torch.isnan(self.rew_buf_terminal)):
+            self.rew_buf_terminal[torch.isnan(self.rew_buf_terminal)] = 0.0
 
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
         return self.rew_buf_terminal
