@@ -616,12 +616,12 @@ class FigureEnv:
     def _reward_final_body_pose(self):
         final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
 
-        print("final_pos_error: ", final_pos_error)
-        print("final_pos_error.shape: ", final_pos_error.shape)
-        print("final_pos_error max: ", torch.max(final_pos_error))
-        print("final_pos_error min: ", torch.min(final_pos_error))
-        print("final_pos_error mean: ", torch.mean(final_pos_error))
-        print("final_pos_error std: ", torch.std(final_pos_error))
+        # print("final_pos_error: ", final_pos_error)
+        # print("final_pos_error.shape: ", final_pos_error.shape)
+        # print("final_pos_error max: ", torch.max(final_pos_error))
+        # print("final_pos_error min: ", torch.min(final_pos_error))
+        # print("final_pos_error mean: ", torch.mean(final_pos_error))
+        # print("final_pos_error std: ", torch.std(final_pos_error))
         
         #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
         return -final_pos_error
