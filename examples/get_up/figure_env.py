@@ -452,8 +452,6 @@ class FigureEnv:
         if torch.any(torch.isnan(self.obs_buf)) or torch.any(torch.isinf(self.obs_buf)):
             print("[WARNING]: NaNs or Infs detected in self.obs_buf, even though we reset the environments with NaNs.")
 
-
-
         # print("self.obs_buf: ", self.obs_buf)
         # print("self.actions: ", self.actions)
 
