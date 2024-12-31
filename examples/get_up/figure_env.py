@@ -21,7 +21,7 @@ def get_train_cfg(exp_name, max_iterations):
         "algorithm": {
             "clip_param": 0.2,
             "desired_kl": 0.01,
-            "entropy_coef": 0.01,
+            "entropy_coef": 0.02,
             "gamma": 0.99,
             "lam": 0.95,
             "learning_rate": 0.0003,
@@ -66,7 +66,7 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 15,  # degree
+        "termination_if_roll_greater_than": 45,  # degree
         "termination_if_yaw_greater_than": 45,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
@@ -76,7 +76,8 @@ def get_cfgs():
         "clip_actions": 1.0,
     }
     obs_cfg = {
-        "num_obs": 59,
+        # "num_obs": 59,
+        "num_obs": 18,
         "obs_scales": {
             "lin_vel": 1.0,
             "ang_vel": 1.0,
@@ -89,16 +90,21 @@ def get_cfgs():
         },
     }
     reward_cfg = {
-        "tracking_sigma": 0.2,
+        # "tracking_sigma": 0.2,
+        "tracking_sigma": 0.05,
         "terminal_reward_dof_near_threshold": 0.15,
         "reward_scales": {
-            "zero_lateral_base_vel": 0.01,
-            "zero_base_yaw_twist": 0.01,
-            "action_rate": 0.5,
-            "base_sideways_tilt": 2.0, # gravity-based
+            # "zero_lateral_base_vel": 0.01,
+            # "zero_base_yaw_twist": 0.01,
+            "zero_lateral_base_vel": 0.0,
+            "zero_base_yaw_twist": 0.0,
+            # "action_rate": 0.5,
+            "action_rate": 0.0,
+            "base_sideways_tilt": 20.0, # gravity-based
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
-            "final_body_pose": 50.0,
+            # "final_body_pose": 50.0,
+            "final_body_pose": 10.0,
             "early_termination_base_yaw_tilt": 50.0,
             "early_termination_base_roll_tilt": 50.0,
             # "final_body_pose_terminal": 100.0,
@@ -274,6 +280,7 @@ class FigureEnv:
         # self.dof_vel = torch.zeros_like(self.actions)
         # self.last_dof_vel = torch.zeros_like(self.actions)
         self.dof_pos = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
+        self.dof_pos_controlled = torch.zeros((self.num_envs, len(self.idx_controlled_joints)), device=self.device, dtype=gs.tc_float)
         self.dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.last_dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
@@ -370,16 +377,28 @@ class FigureEnv:
 
         # assert not torch.any(torch.isnan(self.rew_buf)) and not torch.any(torch.isinf(self.rew_buf)), "self.rew_buf contains NaNs or Infs"
 
+        # # compute observations
+        # self.obs_buf = torch.cat(
+        #     [
+        #         self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
+        #         self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
+        #         self.base_euler * self.obs_scales["base_euler"],  # 3
+        #         self.base_pos * self.obs_scales["base_pos"],  # 3
+        #         self.projected_gravity * self.obs_scales["projected_gravity"],  # 3
+        #         self.dof_pos * self.obs_scales["dof_pos"],  # 30
+        #         self.actions * self.obs_scales["actions"],  # 14
+        #     ],
+        #     axis=-1,
+        # )
+
+        self.dof_pos_controlled[:] = self.robot.get_dofs_position(self.idx_controlled_joints)
+      
         # compute observations
         self.obs_buf = torch.cat(
-            [
-                self.base_lin_vel * self.obs_scales["lin_vel"],  # 3
-                self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
-                self.base_euler * self.obs_scales["base_euler"],  # 3
-                self.base_pos * self.obs_scales["base_pos"],  # 3
-                self.projected_gravity * self.obs_scales["projected_gravity"],  # 3
-                self.dof_pos * self.obs_scales["dof_pos"],  # 30
-                self.actions * self.obs_scales["actions"],  # 14
+            [   self.base_euler * self.obs_scales["base_euler"],  # 3
+                self.dof_pos_controlled * self.obs_scales["dof_pos"],  # 14
+                self.projected_gravity[:,1:2] * self.obs_scales["projected_gravity"],  # 1
+                # self.actions * self.obs_scales["actions"],  # 14
             ],
             axis=-1,
         )
