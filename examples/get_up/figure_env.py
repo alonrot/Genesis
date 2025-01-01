@@ -203,7 +203,11 @@ class FigureEnv:
         )
 
         # add plain
-        self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
+        self.ground = self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
+        
+        # self.ground = self.scene.add_entity(morph=gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True), visualize_contact=True)
+        # self.ground.set_friction_ratio(friction_ratio=0.5 + torch.rand(self.num_envs, 1), link_indices=[0])
+
 
         # add robot
         self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
