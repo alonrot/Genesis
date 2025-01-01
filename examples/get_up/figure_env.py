@@ -627,7 +627,7 @@ class FigureEnv:
 
         return -final_pos_error
 
-    def _reward_final_body_pose(self):
+    def _reward_final_body_pose_exp(self):
         final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
 
         return torch.exp(-final_pos_error / self.reward_cfg["tracking_sigma_final_body_pose"])
