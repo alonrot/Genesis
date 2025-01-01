@@ -66,8 +66,8 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 15,  # degree
-        "termination_if_yaw_greater_than": 15,
+        "termination_if_roll_greater_than": 90,  # degree
+        "termination_if_yaw_greater_than": 90,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
@@ -92,7 +92,8 @@ def get_cfgs():
     reward_cfg = {
         # "tracking_sigma": 0.2,
         "tracking_sigma": 0.05,
-        "terminal_reward_dof_near_threshold": 0.15,
+        "tracking_sigma_final_body_pose": 10.0,
+        "terminal_reward_dof_near_threshold": 0.1, # used for base_sideways_tilt
         "reward_scales": {
             # "zero_lateral_base_vel": 0.01,
             # "zero_base_yaw_twist": 0.01,
@@ -100,13 +101,14 @@ def get_cfgs():
             "zero_base_yaw_twist": 0.0,
             # "action_rate": 0.5,
             "action_rate": 0.0,
-            "base_sideways_tilt": 20.0, # gravity-based
+            "base_sideways_tilt": 12.0, # gravity-based
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
             # "final_body_pose": 50.0,
-            "final_body_pose": 150.0,
-            "early_termination_base_yaw_tilt": 20.0,
-            "early_termination_base_roll_tilt": 20.0,
+            "final_body_pose": 1./3.0, # quadratic
+            "final_body_pose_exp": 10.0,
+            "early_termination_base_yaw_tilt": 1.0,
+            "early_termination_base_roll_tilt": 1.0,
             # "final_body_pose_terminal": 100.0,
         },
     }
@@ -622,9 +624,13 @@ class FigureEnv:
         # print("final_pos_error min: ", torch.min(final_pos_error))
         # print("final_pos_error mean: ", torch.mean(final_pos_error))
         # print("final_pos_error std: ", torch.std(final_pos_error))
-        
-        #TODO(alonrot): Only apply this reward if the episode is terminated without timeout?
+
         return -final_pos_error
+
+    def _reward_final_body_pose(self):
+        final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
+
+        return torch.exp(-final_pos_error / self.reward_cfg["tracking_sigma_final_body_pose"])
     
     def _reward_early_termination_base_yaw_tilt(self):
         base_yaw_tilted = torch.abs(self.base_euler[:, 2]) > self.env_cfg["termination_if_yaw_greater_than"]
