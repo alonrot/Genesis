@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--ckpt", type=int, default=100)
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("--rand_actions", action="store_true", default=False)
+    parser.add_argument("-B", "--num_envs", type=int, default=1)
     args = parser.parse_args()
 
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
@@ -32,7 +33,7 @@ def main():
     writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
     env = FigureEnv(
-        num_envs=1, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, show_viewer=True, writer=writer
+        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, device=device, show_viewer=args.vis, writer=writer
     )
 
     print("Creating runner")

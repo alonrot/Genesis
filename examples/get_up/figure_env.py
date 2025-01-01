@@ -105,8 +105,8 @@ def get_cfgs():
             # "com_position_rt_base_terminal": 1.0,
             # "final_body_pose": 50.0,
             "final_body_pose": 100.0,
-            "early_termination_base_yaw_tilt": 5.0,
-            "early_termination_base_roll_tilt": 5.0,
+            "early_termination_base_yaw_tilt": 15.0,
+            "early_termination_base_roll_tilt": 15.0,
             # "final_body_pose_terminal": 100.0,
         },
     }
