@@ -27,7 +27,7 @@ def main():
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
     gs.init(logging_level="info", backend=backend)
 
-    assert args.exp_name is not "", "Please provide an experiment name"
+    assert args.exp_name != "", "Please provide an experiment name"
 
     if args.ckpt != -1: # resume training
         log_dir = f"logs/{args.exp_name}/"
