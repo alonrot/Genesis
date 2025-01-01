@@ -66,13 +66,13 @@ def get_cfgs():
     env_cfg = {
         "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
         # termination
-        "termination_if_roll_greater_than": 90,  # degree
-        "termination_if_yaw_greater_than": 90,
+        "termination_if_roll_greater_than": 15,  # degree
+        "termination_if_yaw_greater_than": 15,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
-        "action_scale": 0.2,
+        "action_scale": 0.1,
         "clip_actions": 1.0,
     }
     obs_cfg = {
@@ -104,9 +104,9 @@ def get_cfgs():
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
             # "final_body_pose": 50.0,
-            "final_body_pose": 100.0,
-            "early_termination_base_yaw_tilt": 15.0,
-            "early_termination_base_roll_tilt": 15.0,
+            "final_body_pose": 150.0,
+            "early_termination_base_yaw_tilt": 20.0,
+            "early_termination_base_roll_tilt": 20.0,
             # "final_body_pose_terminal": 100.0,
         },
     }
