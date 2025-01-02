@@ -7,7 +7,8 @@ from time import time
 import pdb
 from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
 
-from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog
+from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, closed_fingers_pos
+joint_names = KP.keys()
 
 def main():
 
@@ -38,6 +39,11 @@ def main():
 
     ########################## entities ##########################
     plane = scene.add_entity(gs.morphs.Plane())
+    # plane = scene.add_entity(morph=gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True), visualize_contact=True)
+    # plane.set_friction_ratio(friction_ratio=torch.Tensor([0.5]), link_indices=[0])
+    # plane.set_friction(friction=0.5)
+
+
     robot = scene.add_entity(
         gs.morphs.MJCF(file=mjcf,
         pos   = (0, 0, 0.3),
@@ -47,7 +53,6 @@ def main():
     )
 
     assert len(KP) == len(KD)
-    joint_names = KP.keys()
     assert all(name in KD.keys() for name in joint_names)
 
     dofs_idx = [robot.get_joint(name).dof_idx_local for name in joint_names]
@@ -169,6 +174,23 @@ def run_sim(scene, robot, dofs_idx, joint_names, enable_vis):
 
         dofs_idx = [robot.get_joint(name).dof_idx_local for name in joint_names]
         robot.control_dofs_position(joint_positions_desired, dofs_idx)
+
+
+        # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
+        joint_names_with_fingers = list(joint_names) + list(closed_fingers_pos.keys())
+        motor_dofs_with_fingers = [robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
+        target_joints_pos_to_send_plus_closed_fingers = torch.cat((torch.as_tensor(joint_positions_desired), torch.tensor(list(closed_fingers_pos.values()))), axis=0)
+        robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, motor_dofs_with_fingers)
+
+        # # Print all the joint names
+        # dofs = robot.get_dofs_position(motor_dofs_with_fingers)
+        # for joint in robot.joints:
+        #     print(f"Joint {joint.name} ({joint.dof_idx_local})")# = {robot.get_dofs_position(np.array([joint.dof_idx_local]))}")
+
+        # import pdb; pdb.set_trace()
+
+        # detect_collision = robot.detect_collision()
+        # print("detect_collision: ", detect_collision)
 
         scene.step()
 

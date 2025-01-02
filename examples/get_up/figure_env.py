@@ -12,7 +12,7 @@ else:
 
 from genesis.skeleton_properties import KP,  KD, torque_lb, torque_ub
 
-from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, joint_names_fingers
+from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, closed_fingers_pos
 joint_names = KP.keys()
 
 def get_train_cfg(exp_name, max_iterations):
@@ -307,6 +307,14 @@ class FigureEnv:
         self.writer = writer
         self.global_counter = 0
 
+        self.close_fingers = True
+        if self.close_fingers:
+            self.joint_names_with_fingers = list(joint_names) + list(closed_fingers_pos.keys())
+            self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in self.joint_names_with_fingers]
+            self.fingers_values = torch.zeros((self.num_envs, len(closed_fingers_pos)), device=self.device, dtype=gs.tc_float)
+            self.fingers_values[:] = torch.tensor([list(closed_fingers_pos.values())])
+
+
     def step(self, actions):
         self.actions = torch.clip(actions, -self.env_cfg["clip_actions"], self.env_cfg["clip_actions"])
         exec_actions = self.last_actions if self.simulate_action_latency else self.actions
@@ -345,13 +353,19 @@ class FigureEnv:
 
         assert not torch.any(torch.isnan(target_joints_pos_to_send)) and not torch.any(torch.isinf(target_joints_pos_to_send)), "target_joints_pos_to_send contains NaNs or Infs"
 
-        self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
+        
         
         # # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
-        # joint_names_with_fingers = list(joint_names) + joint_names_fingers
-        # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
+        # self.joint_names_with_fingers = list(joint_names) + joint_names_fingers
+        # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in self.joint_names_with_fingers]
         # target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send, torch.tensor([[1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57]])), axis=1)
         # self.robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, self.motor_dofs_with_fingers)
+
+        if self.close_fingers:
+            target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send,self.fingers_values), axis=1)
+            self.robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, self.motor_dofs_with_fingers)
+        else:
+            self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
 
         # # print joint names
         # for joint in self.robot.joints:

@@ -22,6 +22,9 @@ def main():
     parser.add_argument("--max_iterations", type=int, default=500)
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("--ckpt", type=int, default=-1)
+
+    # Override some parameters from existing training configuration
+    parser.add_argument("--save_interval", type=int, default=-1)
     args = parser.parse_args()
 
     backend = gs.constants.backend.cpu if device == "cpu" else gs.constants.backend.gpu
@@ -32,6 +35,11 @@ def main():
     if args.ckpt != -1: # resume training
         log_dir = f"logs/{args.exp_name}/"
         env_cfg, obs_cfg, reward_cfg, train_cfg = pickle.load(open(f"logs/{args.exp_name}/cfgs.pkl", "rb"))
+    
+        # Override some parameters from existing training configuration
+        if args.save_interval != -1:
+            assert args.save_interval > 1, "Save interval must be greater than 1"
+            train_cfg["runner"]["save_interval"] = args.save_interval
     else:
         log_dir = f"logs/{args.exp_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}/"
         env_cfg, obs_cfg, reward_cfg = get_cfgs()
@@ -39,7 +47,8 @@ def main():
 
         if os.path.exists(log_dir):
             shutil.rmtree(log_dir)
-        os.makedirs(log_dir, exist_ok=True)
+    
+    os.makedirs(log_dir, exist_ok=True)
 
     writer = SummaryWriter(log_dir=log_dir, flush_secs=10)
 
