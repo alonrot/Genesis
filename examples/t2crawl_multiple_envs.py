@@ -7,7 +7,7 @@ from time import time
 import pdb
 from genesis.skeleton_properties import KP, KD, torque_lb, torque_ub
 
-from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, joint_names_fingers
+from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, joint_names_fingers, closed_fingers_pos
 
 def main():
 
@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
 
     ########################## init ##########################
-    gs.init(backend=gs.cpu)
+    gs.init(backend=gs.cpu, precision="32")
 
     ########################## create a scene ##########################
 
@@ -59,6 +59,43 @@ def main():
     B = 4
     scene.build(n_envs=B, env_spacing=(2.5, 2.5))
 
+    # for link in plane.links:
+    #     print("link: ", link)
+
+    # print("Nlinks: ", len(plane.links))
+
+    # plane.set_friction_ratio(
+    #     friction_ratio=0.5 + torch.rand(scene.n_envs, plane.n_links),
+    #     link_indices=np.arange(0, plane.n_links),
+    # )
+
+
+    # plane.set_friction_ratio(
+    #     friction_ratio=torch.tensor([[5.0],[5.0],[5.0],[5.0]]),
+    #     link_indices=np.arange(0, plane.n_links),
+    # )
+
+    # robot.set_friction_ratio(
+    #     friction_ratio=1.0 + 0.2*torch.rand(scene.n_envs, robot.n_links),
+    #     link_indices=np.arange(0, robot.n_links),
+    # )
+
+    for link in plane.links:
+        print(f"plane Link {link.name}")
+        for geom in link.geoms:
+            geom._friction = 0.1
+            print("plane geom.friction", geom.friction)
+            print("plane geom.coup_friction", geom.coup_friction)
+
+
+    # for link in robot.links:
+    #     print(f"ROBOT Link {link.name}")
+    #     for geom in link.geoms:
+    #         geom._friction = 0.1
+    #         print("ROBOT geom.friction", geom.friction)
+    #         print("ROBOT geom.coup_friction", geom.coup_friction)
+
+
     ############ Optional: set control gains ############
     # set positional gains
     robot.set_dofs_kp(
@@ -87,21 +124,9 @@ def main():
     #     link_indices=np.arange(0, robot.n_links),
     # )
 
-    for link in plane.links:
-        print("link: ", link)
-
-    print("Nlinks: ", len(plane.links))
-
-    plane.set_friction_ratio(
-        friction_ratio=0.5 + torch.rand(scene.n_envs, plane.n_links),
-        link_indices=np.arange(0, plane.n_links),
-    )
-
     gs.tools.run_in_another_thread(fn=run_sim, args=(scene, robot, dofs_idx, joint_names, B, args.vis))
     if args.vis:
         scene.viewer.start()
-
-
 
 def simple_ramp_from_current_to_desired_pose(current_pose, desired_pose, alpha):
     return (1 - alpha) * current_pose + alpha * desired_pose
@@ -126,6 +151,9 @@ def run_sim(scene, robot, dofs_idx, joint_names, B, enable_vis):
 
     alpha = 0.01
 
+    fingers_values = torch.zeros((B, len(closed_fingers_pos)))
+    fingers_values[:] = torch.tensor([list(closed_fingers_pos.values())])
+
     while t_elapsed < t_total:
 
         joint_positions_target = np.array([t_pose_arms_up[joint_name] for joint_name in joint_names])
@@ -139,6 +167,12 @@ def run_sim(scene, robot, dofs_idx, joint_names, B, enable_vis):
             joint_positions_target = np.array([ready_to_push[joint_name] for joint_name in joint_names])
         elif t_elapsed < t_hold_start + 3.*t_increment:
             joint_positions_target = np.array([push_up_halfway[joint_name] for joint_name in joint_names])
+            
+            # robot.set_friction_ratio(
+            #     friction_ratio=4.5 + 0.2*torch.rand(scene.n_envs, robot.n_links),
+            #     link_indices=np.arange(0, robot.n_links),
+            # )
+
         elif t_elapsed < t_hold_start + 4.*t_increment:
             joint_positions_target = np.array([push_up[joint_name] for joint_name in joint_names])
         elif t_elapsed < t_hold_start + 5.*t_increment:
@@ -154,7 +188,15 @@ def run_sim(scene, robot, dofs_idx, joint_names, B, enable_vis):
 
         # print("joint_positions_desired_batched.shape: ", joint_positions_desired_batched.shape)
 
-        robot.control_dofs_position(joint_positions_desired_batched, dofs_idx_local=dofs_idx)
+        # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
+        joint_names_with_fingers = list(joint_names) + list(closed_fingers_pos.keys())
+        motor_dofs_with_fingers = [robot.get_joint(name).dof_idx_local for name in joint_names_with_fingers]
+
+        target_joints_pos_to_send_plus_closed_fingers = torch.cat((joint_positions_desired_batched, fingers_values), axis=1)
+        robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, motor_dofs_with_fingers)
+
+
+        # robot.control_dofs_position(joint_positions_desired_batched, dofs_idx_local=dofs_idx)
 
         scene.step()
 

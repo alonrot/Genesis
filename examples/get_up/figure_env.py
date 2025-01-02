@@ -4,6 +4,8 @@ import numpy as np
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
 
+from genesis.engine.solvers.rigid.rigid_solver_decomp import RigidSolver
+
 import os
 if 'figva' in os.uname()[1]:
     MJCF_PATH = "/shared/home/alonrot/project-x/robot_config/sim/b_sample/b_sample.xml"
@@ -110,6 +112,8 @@ def get_cfgs():
             "early_termination_base_yaw_tilt": 1.0,
             "early_termination_base_roll_tilt": 1.0,
             # "final_body_pose_terminal": 100.0,
+            "left_hand_slip": 10.0,
+            "right_hand_slip": 10.0,
         },
     }
 
@@ -160,6 +164,9 @@ def add2tensorboard(writer, infos, iter):
 class FigureEnv:
     def __init__(self, num_envs, env_cfg, obs_cfg, reward_cfg, show_viewer=False, device="cpu", writer=None):
         self.device = torch.device(device)
+
+        self.close_fingers = True
+        self.randomize_friction = True
 
         self.num_envs = num_envs
         self.num_obs = obs_cfg["num_obs"]
@@ -231,6 +238,19 @@ class FigureEnv:
         else:
             self.scene.build(n_envs=self.num_envs)
 
+        # print("Get rigid solver")
+        # self.rigid_solver = None
+        # for solver in self.scene.sim.solvers:
+        #     if not isinstance(solver, RigidSolver):
+        #         continue
+        #     self.rigid_solver = solver
+
+        # print("len(self.scene.sim.solvers): ", len(self.scene.sim.solvers))
+        # assert self.rigid_solver is not None, "Collecting rigid_solver to access link positions rt world"
+
+        # left_hand_pos_rt_world = self.rigid_solver.get_links_pos(idx_left_hand)
+        # left_hand_pos_rt_world = self.rigid_solver.get_links_pos(idx_left_hand)
+
         # names to indices
         self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in joint_names]
 
@@ -259,10 +279,11 @@ class FigureEnv:
             dofs_idx_local = self.motor_dofs,
         )
 
-        self.ground.set_friction_ratio(
-            friction_ratio=0.5 + torch.rand(self.scene.n_envs, self.ground.n_links),
-            link_indices=np.arange(0, self.ground.n_links),
-        )
+        if self.randomize_friction:
+            self.ground.set_friction_ratio(
+                friction_ratio=0.5 + torch.rand(self.scene.n_envs, self.ground.n_links),
+                link_indices=np.arange(0, self.ground.n_links),
+            )
 
         # prepare reward functions and multiply reward scales by dt
         self.reward_functions, self.episode_sums = dict(), dict()
@@ -272,6 +293,31 @@ class FigureEnv:
             self.episode_sums[name] = torch.zeros((self.num_envs,), device=self.device, dtype=gs.tc_float)
 
         print("self.reward_scales: ", self.reward_scales)
+
+        # contact_info = self.robot.get_contacts(with_entity=self.ground)
+
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # contact_info = self.robot.get_contacts(with_entity=self.ground)
+
+        # for key, val in contact_info.items():
+        #     print("key: ", key)
+        #     print("val:", val)
+
+
+        # for links_env_idx_a, links_env_idx_b, valid_mask_in_env in zip(contact_info["link_a"], contact_info["link_b"], contact_info["valid_mask"]):
+        #     print("links_env_idx_a: ", links_env_idx_a)
+        #     print("links_env_idx_b: ", links_env_idx_b)
+
+        #     links_all = self.scene.rigid_solver.links
+        #     for link_a_idx, link_b_idx, valid in zip(links_env_idx_a, links_env_idx_b, valid_mask_in_env):
+        #         link_a = links_all[link_a_idx]
+        #         link_b = links_all[link_b_idx]
+
+        #         print(f"Contact <{link_a.name}, {link_b.name}> | Valid: {valid}")
 
         # initialize buffers
         self.base_lin_vel = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
@@ -306,18 +352,77 @@ class FigureEnv:
             device=self.device,
             dtype=gs.tc_float,
         )
+
+        self.left_hand_position = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
+        self.right_hand_position = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
+        self.left_hand_orientation = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
+        self.right_hand_orientation = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
+        
+        self.left_hand_linear_velocity = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
+        self.right_hand_linear_velocity = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
+        self.left_hand_angular_velocity = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
+        self.right_hand_angular_velocity = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
+        
+        self.right_hand_in_contact = torch.zeros((self.num_envs, 1), device=self.device, dtype=gs.tc_int)
+        self.left_hand_in_contact = torch.zeros((self.num_envs, 1), device=self.device, dtype=gs.tc_int)
+
         self.extras = dict()  # extra information for logging
         
         # Tensorboard writer
         self.writer = writer
         self.global_counter = 0
 
-        self.close_fingers = True
         if self.close_fingers:
             self.joint_names_with_fingers = list(joint_names) + list(closed_fingers_pos.keys())
             self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in self.joint_names_with_fingers]
             self.fingers_values = torch.zeros((self.num_envs, len(closed_fingers_pos)), device=self.device, dtype=gs.tc_float)
             self.fingers_values[:] = torch.tensor([list(closed_fingers_pos.values())])
+
+    def hand_in_contact(self, which_hand: str, verbo: bool = False) -> int:
+        assert which_hand in ["left", "right"]
+        
+        arm_links_names = ["lower_forearm", "wrist", "palm"]
+        arm_links_names += ["distal_2", "distal_3", "distal_4", "distal_5"]
+        arm_links_names += ["medial_2", "medial_3", "medial_4", "medial_5"]
+        arm_links_names_hand = []
+        for arm_link in arm_links_names:
+            arm_links_names_hand += [f"{which_hand}.{arm_link}"]
+
+        if verbo:
+            print("arm_links_names_hand: ", arm_links_names_hand)
+
+        contact_info = self.robot.get_contacts(with_entity=self.ground)
+
+        is_hand_in_contact = torch.zeros((self.num_envs, 1), device=self.device, dtype=gs.tc_int)
+        cc = 0
+        links_all = self.scene.rigid_solver.links
+        for links_env_idx_a, links_env_idx_b, valid_mask_in_env in zip(contact_info["link_a"], contact_info["link_b"], contact_info["valid_mask"]):
+            # if verbo:
+            #     print("links_env_idx_a: ", links_env_idx_a)
+            #     print("links_env_idx_b: ", links_env_idx_b)
+
+            is_hand_in_contact[cc,0] = 0
+
+            for link_a_idx, link_b_idx, valid in zip(links_env_idx_a, links_env_idx_b, valid_mask_in_env):
+
+                if verbo and valid:
+                    link_a = links_all[link_a_idx]
+                    link_b = links_all[link_b_idx]
+                    print(f"Contact <{link_a.name}, {link_b.name}> | Valid: {valid}")
+
+                # Detect contact with the ground (ground corresponds to link idx 0)
+                if valid and link_a_idx == 0 and link_b_idx == 0:
+                    continue
+                
+                if valid and link_a_idx == 0 and links_all[link_b_idx].name in arm_links_names_hand:
+                    is_hand_in_contact[cc,0] = 1
+
+                if valid and link_b_idx == 0 and links_all[link_a_idx].name in arm_links_names_hand:
+                    is_hand_in_contact[cc,0] = 1
+
+            cc += 1
+
+        return is_hand_in_contact
 
 
     def step(self, actions):
@@ -331,7 +436,74 @@ class FigureEnv:
         # print("mean: ", torch.mean(actions))
         # print("std: ", torch.std(actions))
 
+        # Hand pose
+        self.left_hand_position[:,:] = self.robot.get_link_pos("left.hand")
+        self.right_hand_position[:,:] = self.robot.get_link_pos("right.hand")
+        self.left_hand_orientation[:,:] = self.robot.get_link_quat("left.hand")
+        self.right_hand_orientation[:,:] = self.robot.get_link_quat("right.hand")
+
+        # Hand twist
+        self.left_hand_linear_velocity[:,:] = self.robot.get_link_vel("left.hand")
+        self.right_hand_linear_velocity[:,:] = self.robot.get_link_vel("right.hand")
+        self.left_hand_angular_velocity[:,:] = self.robot.get_link_ang("left.hand")
+        self.right_hand_angular_velocity[:,:] = self.robot.get_link_ang("right.hand")
         
+        # idx_link_left_hand = self.robot.get_link("left.hand").idx
+        # print("idx_link_left_hand:", idx_link_left_hand)
+        # self.collision_pairs = self.robot.detect_collision(env_idx=0)
+        # print("self.collision_pairs:", self.collision_pairs)
+        # for pair in self.collision_pairs:
+        #     if idx_link_left_hand == pair[1]:
+        #         print("Left hand in contact")
+
+        self.right_hand_in_contact[:,:] = self.hand_in_contact(which_hand="right", verbo=False)
+        # print("self.right_hand_in_contact: ", self.right_hand_in_contact)
+        self.left_hand_in_contact[:,:] = self.hand_in_contact(which_hand="left", verbo=False)
+        # print("self.left_hand_in_contact: ", self.left_hand_in_contact)
+
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # contact_info = self.robot.get_contacts(with_entity=self.ground)
+
+        # for key, val in contact_info.items():
+        #     print("key: ", key)
+        #     print("val:", val)
+
+
+        # for links_env_idx_a, links_env_idx_b, valid_mask_in_env in zip(contact_info["link_a"], contact_info["link_b"], contact_info["valid_mask"]):
+        #     print("links_env_idx_a: ", links_env_idx_a)
+        #     print("links_env_idx_b: ", links_env_idx_b)
+        #     links_env_a = self.scene.rigid_solver.links[list(links_env_idx_a)]
+        #     links_env_b = self.scene.rigid_solver.links[list(links_env_idx_b)]
+
+        #     for link_a, link_b in zip(links_env_a, links_env_b):
+        #         print(f"Contact <{link_a.name}, {link_b.name}> | Valid: {valid_mask_in_env}")
+
+
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # print("CONTACTS")
+        # contact_info = self.robot.get_contacts(with_entity=self.ground)
+
+        # for links_env_idx_a, links_env_idx_b, valid_mask_in_env in zip(contact_info["link_a"], contact_info["link_b"], contact_info["valid_mask"]):
+        #     print("links_env_idx_a: ", links_env_idx_a)
+        #     print("links_env_idx_b: ", links_env_idx_b)
+
+        #     links_all = self.scene.rigid_solver.links
+        #     for link_a_idx, link_b_idx, valid in zip(links_env_idx_a, links_env_idx_b, valid_mask_in_env):
+
+        #         # Detect contact with the ground (ground corresponds to link idx 0)
+        #         if valid and (link_a_idx == 0 or link_b_idx == 0):
+
+        #             link_a = links_all[link_a_idx]
+        #             link_b = links_all[link_b_idx]
+        #             print(f"Contact <{link_a.name}, {link_b.name}> | Valid: {valid}")
+
         # Learn deviations from the initial body pose
         # target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.default_dof_pos
 
@@ -358,8 +530,6 @@ class FigureEnv:
 
         assert not torch.any(torch.isnan(target_joints_pos_to_send)) and not torch.any(torch.isinf(target_joints_pos_to_send)), "target_joints_pos_to_send contains NaNs or Infs"
 
-        
-        
         # # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
         # self.joint_names_with_fingers = list(joint_names) + joint_names_fingers
         # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in self.joint_names_with_fingers]
@@ -652,7 +822,6 @@ class FigureEnv:
 
     def _reward_final_body_pose_exp(self):
         final_pos_error = torch.sum(torch.square(self.dof_pos - self.terminal_dof_pos), dim=1)
-
         return torch.exp(-final_pos_error / self.reward_cfg["tracking_sigma_final_body_pose"])
     
     def _reward_early_termination_base_yaw_tilt(self):
@@ -662,3 +831,9 @@ class FigureEnv:
     def _reward_early_termination_base_roll_tilt(self):
         base_roll_tilted = torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
         return -base_roll_tilted.float()
+
+    def _reward_left_hand_slip(self):        
+        return -self.left_hand_in_contact[:,0] * torch.sum(torch.square(self.left_hand_linear_velocity[:,0:2]), dim=1)
+
+    def _reward_right_hand_slip(self):
+        return -self.right_hand_in_contact[:,0] * torch.sum(torch.square(self.right_hand_linear_velocity[:,0:2]), dim=1)

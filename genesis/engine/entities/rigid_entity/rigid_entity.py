@@ -1521,6 +1521,24 @@ class RigidEntity(Entity):
         return self._solver.get_links_pos(np.arange(self.link_start, self.link_end), envs_idx)
 
     @gs.assert_built
+    def get_link_pos(self, name: str, envs_idx=None):
+        """
+        Returns position of a link.
+
+        Parameters
+        ----------
+        envs_idx : None | array_like, optional
+            The indices of the environments. If None, all environments will be considered. Defaults to None.
+
+        Returns
+        -------
+        pos : torch.Tensor, shape (n_links, 3) or (n_envs, 3)
+            The position of the entity's link.
+        """
+        idx_link = self.get_link(name).idx
+        return self.get_links_pos()[:,idx_link,:]
+
+    @gs.assert_built
     def get_links_quat(self, envs_idx=None):
         """
         Returns quaternion of all the entity's links.
@@ -1536,6 +1554,24 @@ class RigidEntity(Entity):
             The quaternion of all the entity's links.
         """
         return self._solver.get_links_quat(np.arange(self.link_start, self.link_end), envs_idx)
+
+    @gs.assert_built
+    def get_link_quat(self, name: str, envs_idx=None):
+        """
+        Returns quaternion of all the entity's links.
+
+        Parameters
+        ----------
+        envs_idx : None | array_like, optional
+            The indices of the environments. If None, all environments will be considered. Defaults to None.
+
+        Returns
+        -------
+        quat : torch.Tensor, shape (n_links, 4) or (n_envs, n_links, 4)
+            The quaternion of all the entity's links.
+        """
+        idx_link = self.get_link(name).idx
+        return self.get_links_quat()[:,idx_link,:]
 
     @gs.assert_built
     def get_links_vel(self, envs_idx=None):
@@ -1555,6 +1591,24 @@ class RigidEntity(Entity):
         return self._solver.get_links_vel(np.arange(self.link_start, self.link_end), envs_idx)
 
     @gs.assert_built
+    def get_link_vel(self, name: str, envs_idx=None):
+        """
+        Returns velocity of a link.
+
+        Parameters
+        ----------
+        envs_idx : None | array_like, optional
+            The indices of the environments. If None, all environments will be considered. Defaults to None.
+
+        Returns
+        -------
+        pos : torch.Tensor, shape (n_links, 3) or (n_envs, 3)
+            The velocity of the entity's link.
+        """
+        idx_link = self.get_link(name).idx
+        return self.get_links_vel()[:,idx_link,:]
+
+    @gs.assert_built
     def get_links_ang(self, envs_idx=None):
         """
         Returns angular velocity of all the entity's links.
@@ -1570,6 +1624,24 @@ class RigidEntity(Entity):
             The angular velocity of all the entity's links.
         """
         return self._solver.get_links_ang(np.arange(self.link_start, self.link_end), envs_idx)
+
+    @gs.assert_built
+    def get_link_ang(self, name: str, envs_idx=None):
+        """
+        Returns angular velocity of the entity's link with name "name".
+
+        Parameters
+        ----------
+        envs_idx : None | array_like, optional
+            The indices of the environments. If None, all environments will be considered. Defaults to None.
+
+        Returns
+        -------
+        ang : torch.Tensor, shape (n_links, 3) or (n_envs, n_links, 3)
+            The angular velocity of the entity's link.
+        """
+        idx_link = self.get_link(name).idx
+        return self.get_links_ang()[:,idx_link,:]
 
     @gs.assert_built
     def get_links_inertial_mass(self, ls_idx_local=None, envs_idx=None):
