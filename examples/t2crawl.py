@@ -43,7 +43,6 @@ def main():
     # plane.set_friction_ratio(friction_ratio=torch.Tensor([0.5]), link_indices=[0])
     # plane.set_friction(friction=0.5)
 
-
     robot = scene.add_entity(
         gs.morphs.MJCF(file=mjcf,
         pos   = (0, 0, 0.3),

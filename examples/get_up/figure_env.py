@@ -259,6 +259,11 @@ class FigureEnv:
             dofs_idx_local = self.motor_dofs,
         )
 
+        self.ground.set_friction_ratio(
+            friction_ratio=0.5 + torch.rand(self.scene.n_envs, self.ground.n_links),
+            link_indices=np.arange(0, self.ground.n_links),
+        )
+
         # prepare reward functions and multiply reward scales by dt
         self.reward_functions, self.episode_sums = dict(), dict()
         for name in self.reward_scales.keys():

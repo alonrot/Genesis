@@ -77,9 +77,31 @@ def main():
         dofs_idx_local = dofs_idx,
     )
 
+
+    # robot.set_mass_shift(
+    #     mass_shift=-0.5 + torch.rand(scene.n_envs, robot.n_links),
+    #     link_indices=np.arange(0, robot.n_links),
+    # )
+    # robot.set_COM_shift(
+    #     com_shift=-0.05 + 0.1 * torch.rand(scene.n_envs, robot.n_links, 3),
+    #     link_indices=np.arange(0, robot.n_links),
+    # )
+
+    for link in plane.links:
+        print("link: ", link)
+
+    print("Nlinks: ", len(plane.links))
+
+    plane.set_friction_ratio(
+        friction_ratio=0.5 + torch.rand(scene.n_envs, plane.n_links),
+        link_indices=np.arange(0, plane.n_links),
+    )
+
     gs.tools.run_in_another_thread(fn=run_sim, args=(scene, robot, dofs_idx, joint_names, B, args.vis))
     if args.vis:
         scene.viewer.start()
+
+
 
 def simple_ramp_from_current_to_desired_pose(current_pose, desired_pose, alpha):
     return (1 - alpha) * current_pose + alpha * desired_pose
