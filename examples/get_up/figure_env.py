@@ -72,10 +72,12 @@ def get_cfgs():
         "termination_if_yaw_greater_than": 90,
         # base pose
         "base_init_pos": [0.0, 0.0, 0.2],
+        "base_init_pos_randomize_friction": [0.0, 0.0, 0.2],
         "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
         "episode_length_s": 20.0,
         "action_scale": 0.1,
         "clip_actions": 1.0,
+        "friction_case": True,
     }
     obs_cfg = {
         # "num_obs": 59,
@@ -102,7 +104,7 @@ def get_cfgs():
             "zero_lateral_base_vel": 0.0,
             "zero_base_yaw_twist": 0.0,
             # "action_rate": 0.5,
-            "action_rate": 0.0,
+            "action_rate": 0.5,
             "base_sideways_tilt": 12.0, # gravity-based
             # "com_position_rt_base": 1.0,
             # "com_position_rt_base_terminal": 1.0,
@@ -166,7 +168,7 @@ class FigureEnv:
         self.device = torch.device(device)
 
         self.close_fingers = True
-        self.randomize_friction = True
+        self.randomize_friction = env_cfg["friction_case"]
 
         self.num_envs = num_envs
         self.num_obs = obs_cfg["num_obs"]
@@ -217,7 +219,12 @@ class FigureEnv:
 
 
         # add robot
-        self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
+
+        if self.randomize_friction:
+            self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos_randomize_friction"], device=self.device)
+        else:
+            self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
+
         self.base_init_quat = torch.tensor(self.env_cfg["base_init_quat"], device=self.device)
         self.inv_base_init_quat = inv_quat(self.base_init_quat)
         self.robot = self.scene.add_entity(
@@ -342,16 +349,29 @@ class FigureEnv:
         self.last_dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
         self.base_quat = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
-        self.default_dof_pos = torch.tensor(
-            [t_pose_ground[name] for name in joint_names],
-            device=self.device,
-            dtype=gs.tc_float,
-        )
-        self.terminal_dof_pos = torch.tensor(
-            [push_up_halfway[name] for name in joint_names],
-            device=self.device,
-            dtype=gs.tc_float,
-        )
+        
+        if self.randomize_friction:
+            self.default_dof_pos = torch.tensor(
+                [push_up_halfway[name] for name in joint_names],
+                device=self.device,
+                dtype=gs.tc_float,
+            )
+            self.terminal_dof_pos = torch.tensor(
+                [push_up_halfway[name] for name in joint_names],
+                device=self.device,
+                dtype=gs.tc_float,
+            )
+        else:
+            self.default_dof_pos = torch.tensor(
+                [t_pose_ground[name] for name in joint_names],
+                device=self.device,
+                dtype=gs.tc_float,
+            )
+            self.terminal_dof_pos = torch.tensor(
+                [push_up_halfway[name] for name in joint_names],
+                device=self.device,
+                dtype=gs.tc_float,
+            )
 
         self.left_hand_position = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
         self.right_hand_position = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
