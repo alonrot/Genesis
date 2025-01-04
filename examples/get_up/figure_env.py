@@ -17,130 +17,7 @@ from genesis.skeleton_properties import KP,  KD, torque_lb, torque_ub
 from genesis.pose_library import crawl_pose_elbows_semi_flexed, t_pose_ground_random, t_pose, t_pose_ground, t_pose_arms_up, ready_to_push, push_up_halfway, push_up, to_crawl, downward_facing_dog, closed_fingers_pos
 joint_names = KP.keys()
 
-def get_train_cfg(exp_name, max_iterations):
-
-    train_cfg_dict = {
-        "algorithm": {
-            "clip_param": 0.2,
-            "desired_kl": 0.01,
-            "entropy_coef": 0.02,
-            "gamma": 0.99,
-            "lam": 0.95,
-            "learning_rate": 0.0003,
-            "max_grad_norm": 1.0,
-            "num_learning_epochs": 5,
-            "num_mini_batches": 16,
-            "schedule": "adaptive",
-            "use_clipped_value_loss": True,
-            "value_loss_coef": 1.0,
-        },
-        "init_member_classes": {},
-        "policy": {
-            "activation": "elu",
-            "actor_hidden_dims": [512, 256, 128],
-            "critic_hidden_dims": [512, 256, 128],
-            "init_noise_std": 1.0,
-        },
-        "runner": {
-            "algorithm_class_name": "PPO",
-            "checkpoint": -1,
-            "experiment_name": exp_name,
-            "load_run": -1,
-            "log_interval": 1,
-            "max_iterations": max_iterations,
-            "num_steps_per_env": 24,
-            "policy_class_name": "ActorCritic",
-            "record_interval": -1,
-            "resume": False,
-            "resume_path": None,
-            "run_name": "",
-            "runner_class_name": "runner_class_name",
-            "save_interval": 25,
-        },
-        "runner_class_name": "OnPolicyRunner",
-        "seed": 1,
-    }
-
-    return train_cfg_dict
-
-
-def get_cfgs():
-    env_cfg = {
-        "num_actions": 14, # NOTE: For now, set as many as dofs. Later, exclude neck and others
-        # termination
-        "termination_if_roll_greater_than": 90,  # degree
-        "termination_if_yaw_greater_than": 90,
-        # base pose
-        "base_init_pos": [0.0, 0.0, 0.2],
-        "base_init_pos_randomize_friction": [0.0, 0.0, 0.2],
-        "base_init_quat": [0.7071, 0.0, 0.7071, 0.0],
-        "episode_length_s": 20.0,
-        "action_scale": 0.1,
-        "clip_actions": 1.0,
-        "randomize_friction": False,
-        "ground_constant_friction": True, # mutually exclusive with randomize_friction
-    }
-    obs_cfg = {
-        # "num_obs": 59,
-        "num_obs": 18,
-        "obs_scales": {
-            "lin_vel": 1.0,
-            "ang_vel": 1.0,
-            "base_euler": 0.1,
-            "base_pos": 0.1,
-            "projected_gravity": 1.0,
-            "dof_pos": 1./3.1415,
-            "dof_vel": 1.0,
-            "actions": 0.25,
-        },
-    }
-    reward_cfg = {
-        # "tracking_sigma": 0.2,
-        "tracking_sigma": 0.05,
-        "tracking_sigma_final_body_pose": 10.0,
-        "terminal_reward_dof_near_threshold": 0.1, # used for base_sideways_tilt
-        "reward_scales": {
-            # "zero_lateral_base_vel": 0.01,
-            # "zero_base_yaw_twist": 0.01,
-            "zero_lateral_base_vel": 0.0,
-            "zero_base_yaw_twist": 0.0,
-            # "action_rate": 0.5,
-            "action_rate": 0.5,
-            "base_sideways_tilt": 12.0, # gravity-based
-            # "com_position_rt_base": 1.0,
-            # "com_position_rt_base_terminal": 1.0,
-            # "final_body_pose": 50.0,
-            "final_body_pose": 1./3.0, # quadratic
-            "final_body_pose_exp": 10.0,
-            "early_termination_base_yaw_tilt": 1.0,
-            "early_termination_base_roll_tilt": 1.0,
-            # "final_body_pose_terminal": 100.0,
-            "left_hand_slip": 10.0,
-            "right_hand_slip": 10.0,
-        },
-    }
-
-    return env_cfg, obs_cfg, reward_cfg
-
-
-learnable_joints = [
-    "left.hip_y",
-    "left.knee",
-    "left.ankle_y",
-    "left.shoulder_j1",
-    "left.shoulder_j2",
-    "left.elbow",
-    # "left.wrist_roll",
-    "left.wrist_yaw",
-    "right.hip_y",
-    "right.knee",
-    "right.ankle_y",
-    "right.shoulder_j1",
-    "right.shoulder_j2",
-    "right.elbow",
-    # "right.wrist_roll",
-    "right.wrist_yaw",
-]
+from genesis.figure_cfg import learnable_joints
 
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
@@ -179,9 +56,12 @@ class FigureEnv:
 
         assert (self.ground_constant_friction and self.randomize_friction) == False, "ground_constant_friction and randomize_friction are mutually exclusive"
 
-        self.push_pose_stay = False
+        self.push_pose_stay = True
         if self.randomize_friction:
             self.push_pose_stay = True
+
+        # If False, we add delta actions to the default pose
+        self.control_based_on_current_pos = False
 
         self.num_envs = num_envs
         self.num_obs = obs_cfg["num_obs"]
@@ -366,6 +246,7 @@ class FigureEnv:
         # self.last_dof_vel = torch.zeros_like(self.actions)
         self.dof_pos = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.dof_pos_controlled = torch.zeros((self.num_envs, len(self.idx_controlled_joints)), device=self.device, dtype=gs.tc_float)
+        self.target_joints_pos_send = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.last_dof_vel = torch.zeros((self.num_envs, len(self.motor_dofs)), device=self.device, dtype=gs.tc_float)
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
@@ -552,36 +433,53 @@ class FigureEnv:
         # target_dof_pos = exec_actions * self.env_cfg["action_scale"] + self.dof_pos
 
         # Learn delta actions for controlled joints only
-        target_controlled_joints_pos_current_plus_actions = exec_actions * self.env_cfg["action_scale"] + self.robot.get_dofs_position(self.idx_controlled_joints)
 
-        target_joints_pos_to_send = self.robot.get_dofs_position(self.motor_dofs)
-        # print("target_controlled_joints_pos_current_plus_actions.shape: ", target_controlled_joints_pos_current_plus_actions.shape)
-        # print("target_joints_pos_to_send.shape: ", target_joints_pos_to_send.shape)
+        # exec_actions[...] = 0.0
         
-        # Add target_controlled_joints_pos_current_plus_actions to target_joints_pos_to_send in the right indices
-        # print("self.idx_controlled_joints: ", self.idx_controlled_joints)
-        # print("self.motor_dofs: ", self.motor_dofs)
-        for idx in self.idx_controlled_joints:
-            idx_local = self.motor_dofs.index(idx)
-            target_joints_pos_to_send[:,idx_local] = target_controlled_joints_pos_current_plus_actions[:,self.idx_controlled_joints.index(idx)]
+        if self.control_based_on_current_pos:
+
+            # target_controlled_joints_pos_current_plus_actions = exec_actions * self.env_cfg["action_scale"] + self.robot.get_dofs_position(self.idx_controlled_joints)
+            target_controlled_joints_pos_current_plus_actions = exec_actions * self.env_cfg["action_scale"] + self.robot.get_dofs_position(self.idx_controlled_joints)
+
+            self.target_joints_pos_send = self.robot.get_dofs_position(self.motor_dofs)
+            # self.target_joints_pos_send[:,:] = self.default_dof_pos
+            # print("target_controlled_joints_pos_current_plus_actions.shape: ", target_controlled_joints_pos_current_plus_actions.shape)
+            # print("self.target_joints_pos_send.shape: ", self.target_joints_pos_send.shape)
+            
+            # Add target_controlled_joints_pos_current_plus_actions to self.target_joints_pos_send in the right indices
+            # print("self.idx_controlled_joints: ", self.idx_controlled_joints)
+            # print("self.motor_dofs: ", self.motor_dofs)
+            for idx in self.idx_controlled_joints:
+                idx_local = self.motor_dofs.index(idx)
+                self.target_joints_pos_send[:,idx_local] = target_controlled_joints_pos_current_plus_actions[:,self.idx_controlled_joints.index(idx)]
+
+            # Ensure self.target_joints_pos_send is not pointing to self.default_dof_pos
+            assert not torch.all(self.target_joints_pos_send == self.default_dof_pos), "After modfying self.target_joints_pos_send, self.default_dof_pos should stay the same"
+
+        else:
+            self.target_joints_pos_send[:,:] = self.default_dof_pos
+            delta_actions_on_controlled_joints = exec_actions * self.env_cfg["action_scale"]
+            for idx in self.idx_controlled_joints:
+                idx_local = self.motor_dofs.index(idx)
+                self.target_joints_pos_send[:,idx_local] += delta_actions_on_controlled_joints[:,self.idx_controlled_joints.index(idx)]
 
 
-        # print("target_joints_pos_to_send: ", target_joints_pos_to_send)
-        # print("target_joints_pos_to_send.shape: ", target_joints_pos_to_send.shape)
+        # print("self.target_joints_pos_send: ", self.target_joints_pos_send)
+        # print("self.target_joints_pos_send.shape: ", self.target_joints_pos_send.shape)
 
-        assert not torch.any(torch.isnan(target_joints_pos_to_send)) and not torch.any(torch.isinf(target_joints_pos_to_send)), "target_joints_pos_to_send contains NaNs or Infs"
+        assert not torch.any(torch.isnan(self.target_joints_pos_send)) and not torch.any(torch.isinf(self.target_joints_pos_send)), "self.target_joints_pos_send contains NaNs or Infs"
 
         # # To close the fingers, we need to expand self.motor_dofs to incldue them - otherwise, we can't control them
         # self.joint_names_with_fingers = list(joint_names) + joint_names_fingers
         # self.motor_dofs_with_fingers = [self.robot.get_joint(name).dof_idx_local for name in self.joint_names_with_fingers]
-        # target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send, torch.tensor([[1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57]])), axis=1)
+        # target_joints_pos_to_send_plus_closed_fingers = torch.cat((self.target_joints_pos_send, torch.tensor([[1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.74533, 2.234025, 2.234025, 2.234025, 2.234025, 2.234025, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57, 1.57]])), axis=1)
         # self.robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, self.motor_dofs_with_fingers)
 
         if self.close_fingers:
-            target_joints_pos_to_send_plus_closed_fingers = torch.cat((target_joints_pos_to_send,self.fingers_values), axis=1)
+            target_joints_pos_to_send_plus_closed_fingers = torch.cat((self.target_joints_pos_send,self.fingers_values), axis=1)
             self.robot.control_dofs_position(target_joints_pos_to_send_plus_closed_fingers, self.motor_dofs_with_fingers)
         else:
-            self.robot.control_dofs_position(target_joints_pos_to_send, self.motor_dofs)
+            self.robot.control_dofs_position(self.target_joints_pos_send, self.motor_dofs)
 
         # # print joint names
         # for joint in self.robot.joints:

@@ -4,7 +4,8 @@ import pickle
 import shutil
 from datetime import datetime
 
-from figure_env import FigureEnv, get_train_cfg, get_cfgs
+from figure_env import FigureEnv
+from genesis.figure_cfg import get_train_cfg, get_cfgs
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
