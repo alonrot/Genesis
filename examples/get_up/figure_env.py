@@ -77,7 +77,8 @@ def get_cfgs():
         "episode_length_s": 20.0,
         "action_scale": 0.1,
         "clip_actions": 1.0,
-        "friction_case": True,
+        "randomize_friction": False,
+        "ground_constant_friction": True, # mutually exclusive with randomize_friction
     }
     obs_cfg = {
         # "num_obs": 59,
@@ -168,7 +169,19 @@ class FigureEnv:
         self.device = torch.device(device)
 
         self.close_fingers = True
-        self.randomize_friction = env_cfg["friction_case"]
+        self.randomize_friction = False
+        if "randomize_friction" in env_cfg.keys():
+            self.randomize_friction = env_cfg["randomize_friction"]
+            
+        self.ground_constant_friction = False
+        if "ground_constant_friction" in env_cfg.keys():
+            self.ground_constant_friction = env_cfg["ground_constant_friction"]
+
+        assert (self.ground_constant_friction and self.randomize_friction) == False, "ground_constant_friction and randomize_friction are mutually exclusive"
+
+        self.push_pose_stay = False
+        if self.randomize_friction:
+            self.push_pose_stay = True
 
         self.num_envs = num_envs
         self.num_obs = obs_cfg["num_obs"]
@@ -216,6 +229,14 @@ class FigureEnv:
         
         # self.ground = self.scene.add_entity(morph=gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True), visualize_contact=True)
         # self.ground.set_friction_ratio(friction_ratio=0.5 + torch.rand(self.num_envs, 1), link_indices=[0])
+
+        if self.ground_constant_friction:
+            for link in self.ground.links:
+                print(f"self.ground Link {link.name}")
+                for geom in link.geoms:
+                    geom._friction = 0.1
+                    print("self.ground geom.friction", geom.friction)
+                    print("self.ground geom.coup_friction", geom.coup_friction)
 
 
         # add robot
@@ -350,7 +371,7 @@ class FigureEnv:
         self.base_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=gs.tc_float)
         self.base_quat = torch.zeros((self.num_envs, 4), device=self.device, dtype=gs.tc_float)
         
-        if self.randomize_friction:
+        if self.push_pose_stay:
             self.default_dof_pos = torch.tensor(
                 [push_up_halfway[name] for name in joint_names],
                 device=self.device,
